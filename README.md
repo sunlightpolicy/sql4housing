@@ -3,7 +3,7 @@ From 2001 to 2015, the share of households considered “rent burdened”- spend
 
 Many cities have struggled to keep housing supply in pace with increased demand, and tenants’ rights have become a focal point for local advocates and, increasingly, policy-makers. Despite public efforts to protect tenants, city governments don’t hold landlords accountable to maintaining their properties, and let developers lobby against tenant protection laws in order to buy and flip properties with short turnaround.
 
-# Civic Hacking in Housing Advocacy
+## Civic Hacking in Housing Advocacy
 
 Housing advocates have an essential role to play in protecting residents from the consequences of real estate speculation. But they’re often at a significant disadvantage; the real estate lobby has access to a wealth of data and technological expertise. Civic hackers and open data could play an essential role in leveling the playing field.
 
@@ -11,7 +11,7 @@ Civic hackers have facilitated wins for housing advocates by scraping data or su
 
 Hackers at New York City’s Housing Data Coalition created a host of civic apps that identify problematic landlords by exposing owners behind shell companies, or flagging buildings where tenants are at risk of displacement. In a similar vein, Washington DC’s Housing Insights tool aggregates a wide variety of data to help advocates make decisions about affordable housing.
 
-# Barriers and opportunities
+## Barriers and opportunities
 
 Today, the degree to which housing data exists, is openly available, and consistently reliable varies widely, even within cities themselves. Cities with robust communities of affordable housing advocacy groups may not be connected to people who can help open data and build usable tools. Even in cities with robust advocacy and civic tech communities, these groups may not know how to work together because of the significant institutional knowledge that’s required to understand how to best support housing advocacy efforts.
 
@@ -19,7 +19,7 @@ In cities where civic hackers have tried to create useful open housing data repo
 
 Since these tools are open source, civic hackers in a multitude of cities can use existing work to develop their own, locally relevant tools to support local housing advocates. 
 
-# Soliciting feedback on a new project for usable housing data
+## Soliciting feedback on a new project for usable housing data
 
 Throughout this summer, I’m going to build a tool for civic hackers to create databases of housing data for their own cities. My goal is to build on the work that civic hackers have initiated in New York, DC, and elsewhere, thereby reducing the startup effort required to develop apps to support housing advocacy efforts.
 
