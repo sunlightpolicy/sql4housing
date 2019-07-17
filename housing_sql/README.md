@@ -8,3 +8,7 @@ This folder is based on a forked copy of Dallas Morning News' [socrata2sql](http
 ## Requirements
 
 - Python 3.x
+
+## Usage
+
+Changes in usage will be periodically updated and documented within the docstring of [housing_sql.py](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/housing_sql.py)
