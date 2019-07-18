@@ -1,43 +1,48 @@
 """Housing data to SQL database loader
 
-Load a dataset from the Socrata API or HUD's open data portal into a SQL database.
-The loader supports any database supported by SQLalchemy.
+Load a dataset directly from an API (Socrata, HUD, Census) or file (csv or shp) 
+into a SQL database. The loader supports any database supported by SQLalchemy.
 This file is adapted from a forked copy of DallasMorningNews/socrata2sql
 
 Usage:
-  housing_sql.py insert (--HUD <site> | --Socrata <site> <dataset_id> [-a=<app_token>]) [-d=<database_url>] [-t=<table_name>]
-  housing_sql.py ls <site> [-a=<app_token>]
+  housing_sql.py hud <site> [-d=<database_url>] [-t=<table_name>]
+  housing_sql.py Socrata <site> <dataset_id> [-a=<app_token>] [-d=<database_url>] [-t=<table_name>]
+  housing_sql.py Census <dataset> <year> <table> <geography> <api_key> [-d=<database_url>] [-t=<table_name>]
+  housing_sql.py csv (<location> | <site>) [-d=<database_url>] [-t=<table_name>]
+  housing_sql.py shp (<location> | <site>) [-d=<database_url>] [-t=<table_name>]
   housing_sql.py (-h | --help)
-  housing_sql.py(-v | --version)
+  housing_sql.py (-v | --version)
 
 Options:
-  <site>             The domain for the open data site. Ex: www.dallasopendata.com
-  <dataset_id>       The ID of the dataset on Socrata's open data site. This is usually
-                     a few characters, separated by a hyphen, at the end of the
-                     URL. Ex: 64pp-jeba
+  <site>             The domain for the open data site. For Socrata, this is the
+                     URL to the open data portal (Ex: www.dallasopendata.com).
+                     For HUD, this is the Query URL as created in the API
+                     Explorer portion of each dataset's page on the site
+                     https://hudgis-hud.opendata.arcgis.com.
+  <dataset_id>       The ID of the dataset on Socrata's open data site. This is 
+                     usually a few characters, separated by a hyphen, at the end 
+                     of the URL. Ex: 64pp-jeba
   -d=<database_url>  Database connection string for destination database as
                      diacdlect+driver://username:password@host:port/database.
-                     Default: sqlite:///<dataset name>.sqlite
+                     Default: sqlite:///<source name>.sqlite
   -t=<table_name>    Destination table in the database. Defaults to a sanitized
-                     version of the dataset's name on Socrata.
-  -a=<app_token>     App token for the site. Only necessary for high-volume
-                     requests. Default: None
+                     version of the dataset or file's name.
+  -a=<app_token>     App token for the Socrata site. Only necessary for
+                     high-volume requests. Default: None
   -h --help          Show this screen.
   -v --version       Show version.
 
 Examples:
-  List all datasets on the Dallas open data portal:
-  $ housing_sql.py ls www.dallasopendata.com
 
   Load the Dallas check register into a local SQLite file (file name chosen
   from the dataset name):
-  $ housing_sql.py insert --Socrata www.dallasopendata.com 64pp-jeba
+  $ housing_sql.py Socrata www.dallasopendata.com 64pp-jeba
 
   Load it into a PostgreSQL database called mydb:
-  $ housing_sql.py insert --Socrata www.dallasopendata.com 64pp-jeba -d"postgresql:///mydb"
+  $ housing_sql.py Socrata www.dallasopendata.com 64pp-jeba -d"postgresql:///mydb"
 
   Load Sandy Damage Estimates from HUD into a PostgreSQL database called mydb:
-  $ housing_sql.py insert --HUD "https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/FemaDamageAssessmnts_01172013_new/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=json" -d"postgresql:///mydb"
+  $ housing_sql.py HUD "https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/FemaDamageAssessmnts_01172013_new/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=json" -d=postgresql:///mydb
 """
 from os import path
 import re
@@ -62,102 +67,37 @@ from sqlalchemy.types import Text
 from tabulate import tabulate
 
 #from socrata2sql.socrata2sql import __version__
+import source_classes as sc
 from exceptions import CLIError
 from parsers import parse_datetime
 from parsers import parse_geom
 from parsers import parse_str
+from sources import socrata, hud
 import ui
 
 
-def get_sql_col(col_data_type, api):
-    """Map a Socrata column or esriFieldType type to a SQLalchemy column class"""
-    col_mappings = {
-        "Socrata": {
-            'checkbox': Boolean,
-            'url': Text,
-            'text': Text,
-            'number': Numeric,
-            'calendar_date': DateTime,
-            'point': Geometry(geometry_type='POINT', srid=4326),
-            'location': Geometry(geometry_type='POINT', srid=4326),
-            'multipolygon': Geometry(geometry_type='MULTIPOLYGON', srid=4326)
-        },
-        "HUD": {
-            'esriFieldTypeString': Text,
-            'esriFieldTypeInteger': Integer,
-            'esriFieldTypeOID': Integer,
-            'esriFieldTypeSmallInteger': Integer,
-            'esriFieldTypeDouble': Numeric,
-            'esriFieldTypeSingle': Numeric,
-            'esriFieldTypeDate': DateTime,
-            'esriFieldTypeGeometry': \
-                Geometry(geometry_type='GEOMETRY', srid=4326),
-        }
-    }
-
-    try:
-        return Column(col_mappings[api][col_data_type])
-    except KeyError:
-        msg = 'Unable to map %s type "%s" to a SQL type.' % (api, col_data_type)
-        raise NotImplementedError(msg)
-
-
-def get_table_name(raw_str):
-    """Transform a string into a suitable table name
-
-    Swaps spaces for _s, lowercaes and strips special characters. Ex:
-    'Calls to 9-1-1' becomes 'calls_to_911'
-    """
-    no_spaces = raw_str.replace(' ', '_')
-    return re.sub(r'\W',  '', no_spaces).lower()
-
-
-def default_db_str(dataset_metadata):
-    """Create connection string to a local SQLite database from dataset name"""
-    dataset_slug = get_table_name(dataset_metadata['name'])
-    db_filename = '%s.sqlite' % dataset_slug
-
-    if path.isfile(db_filename):
-        msg_tpl = (
-            '%s already exists. Specify a unique database name with -d. '
-            'Example: -d sqlite:///unique_name.sqlite'
-        )
-        raise CLIError(msg_tpl % db_filename)
-
-    return 'sqlite:///%s' % db_filename
-
-
-def get_binding(dataset_metadata, geo, dest, api):
+def get_binding(source):
     """Translate the Socrata API metadata into a SQLAlchemy binding
 
     This looks at each column type in the Socrata API response and creates a
     SQLAlchemy binding with columns to match. For now it fails loudly if it
     encounters a column type we've yet to map to its SQLAlchemy type."""
-    if dest:
-        table_name = dest        
-    elif api == "Socrata":
-        table_name = get_table_name(dataset_metadata['name'])
 
     record_fields = {
-        '__tablename__': table_name,
+        '__tablename__': source.tbl_name,
         '_pk_': Column(Integer, primary_key=True)
     }
 
     ui.header(
-        'Setting up new table, "%s", from %s API fields' % (table_name, api)
+        'Setting up new table, "%s", from %s source fields' % (source.tbl_name, source.name)
     )
 
     geo_types = ('location', 'point', 'multipolygon', 'esriFieldTypeGeometry')
 
-    for col in dataset_metadata:
-        if api == "Socrata":
-            col_name = col['fieldName'].lower()
-            col_type = col['dataTypeName']
-        elif api == "HUD":
-            col_name = col['name'].lower()
-            col_type = col['type']
+    for col in source.metadata:
+        col_name, col_type = source.format_col(col)
 
-        if col_type in geo_types and geo is False:
+        if col_type in geo_types and source.geo is False:
             msg = (
                 '"%s" is a %s column but your database doesn\'t support '
                 'PostGIS so it\'ll be skipped.'
@@ -171,120 +111,57 @@ def get_binding(dataset_metadata, geo, dest, api):
 
         try:
             print(col_name, ": ", col_type)
-            record_fields[col_name] = get_sql_col(col_type, api)
+
+            try:
+                record_fields[col_name] = Column(
+                    source.col_mappings[col_type]
+                )
+            except KeyError:
+                msg = 'Unable to map %s type "%s" to a SQL type.' % (
+                    source.name, col_data_type
+                )
+                raise NotImplementedError(msg)
 
         except NotImplementedError as e:
             ui.item('%s' % str(e))
             continue
 
-    return type('SocrataRecord', (declarative_base(),), record_fields)
+    source.binding = type('DataRecord', (declarative_base(),), record_fields)
 
 
-def get_connection(db_str, dataset_metadata):
+def get_connection(source):
     """Get a DB connection from the CLI args and Socrata API metadata
 
     Uess the DB URL passed in by the user to generate a database connection.
     By default, returns a local SQLite database."""
-    if db_str:
-        engine = create_engine(db_str)
-        ui.header('Connecting to database')
-    else:
-        default = default_db_str(dataset_metadata)
-        ui.header('Connecting to database')
-        engine = create_engine(default)
-        ui.item('Using default SQLite database "%s".' % default)
+    source.engine = create_engine(source.db_name)
+    ui.header('Connecting to database')
+
 
     Session = sessionmaker()
-    Session.configure(bind=engine)
+    Session.configure(bind=source.engine)
 
-    session = Session()
+    source.session = Session()
 
     # Check for PostGIS support
     gis_q = 'SELECT PostGIS_version();'
     try:
-        session.execute(gis_q)
-        geo_enabled = True
+        source.session.execute(gis_q)
+        source.geo = True
     except OperationalError:
-        geo_enabled = False
+        source.geo = False
     except ProgrammingError:
-        geo_enabled = False
+        source.geo = False
     finally:
-        session.commit()
+        source.session.commit()
 
-    if geo_enabled:
+    if source.geo:
         ui.item(
             'PostGIS is installed. Geometries will be imported '
             'as PostGIS geoms.'
         )
     else:
         ui.item('Query "%s" failed. Geometry columns will be skipped.' % gis_q)
-
-    return engine, session, geo_enabled
-
-
-def get_data(api, dataset_id, socrata_client=None):
-    """Get the row count of a dataset and the dataset itself"""
-    if api == "Socrata":
-        count = socrata_client.get(
-           dataset_id,
-            select='COUNT(*) AS count'
-        )
-        return int(count[0]['count']), \
-               get_socrata_data(socrata_client, dataset_id)
-
-    if api == "HUD":
-        response_text = str(
-            urllib.request.urlopen(
-                re.search('.*FeatureServer/', dataset_id).group()
-            ).read()
-        )
-        dataset_code = re.search(
-            'Service ItemId:</b> \w*', response_text
-        ).group()[20:]
-        geojson = 'https://opendata.arcgis.com/datasets/{}_0.geojson'.format(
-            dataset_code
-        )
-        print(geojson)
-        response_geojson = urllib.request.urlopen(geojson)
-        data = json.loads(response_geojson.read())['features']
-        data = [x['properties'] for x in data]
-        return len(data), data
-
-
-def get_socrata_data(socrata_client, dataset_id, page_size=5000):
-    """Iterate over a datasets pages using the Socrata API"""
-    page_num = 0
-    more_pages = True
-
-    while more_pages:
-        api_data = socrata_client.get(
-            dataset_id,
-            limit=page_size,
-            offset=page_size * page_num,
-        )
-
-        if len(api_data) < page_size:
-            more_pages = False
-
-        page_num += 1
-        yield api_data
-
-
-def list_datasets(socrata_client, domain):
-    """List all datasets on a portal using the Socrata API"""
-    all_metadata = socrata_client.datasets(domains=[domain], only=['dataset'])
-
-    key_fields = []
-    for dataset in all_metadata:
-        # Simplify the metadata returned by the API
-        key_fields.append({
-            'Name': dataset['resource']['name'],
-            'Category': dataset['classification'].get('domain_category'),
-            'ID': dataset['resource']['id'],
-            'URL': dataset['permalink']
-        })
-
-    return sorted(key_fields, key=lambda _: _['Name'].lower())
 
 
 def parse_row(row, binding):
@@ -326,79 +203,76 @@ def insert_data(page, session, bar, Binding):
 
 def main():
 
-    # TO DO Set up CLI in docopt. For now, pass a dictionary.
     arguments = docopt(__doc__)
 
-    if arguments['--HUD']:
-        api = "HUD"
-    if arguments['--Socrata']:
-        api = "Socrata"
+    print(arguments)
 
-    site = arguments['<site>']
-    if api == "Socrata":
-        client = Socrata(site, arguments.get('-a'))
-    if api == "HUD":
-        dataset_id = site
-        client = None
 
     try:
-        if arguments.get('ls'):
-            datasets = list_datasets(client, arguments['<site>'])
-            print(tabulate(datasets, headers='keys', tablefmt='psql'))
-        elif arguments.get('insert'):        
-            if api == "Socrata":
-                assert(arguments['<dataset_id>']), \
-                    "Dataset ID is required on the Socrata API"
-                dataset_id = arguments['<dataset_id>']
-                metadata = client.get_metadata(dataset_id)['columns']
-            if api == "HUD":
-                metadata = json.loads(
-                    urllib.request.urlopen(site).read())['fields']
 
-            engine, session, geo = get_connection(arguments['-d'], metadata)
-            
-            print("getting binding")
-            Binding = get_binding(
-                metadata, geo, arguments['-t'], api
-            )
+        #Get metadata to create binding      
+        if arguments['Socrata']:
+            source = socrata
+            client, metadata = source.find_metadata(
+                arguments['<site>'], arguments['<dataset_id>'], arguments['-a']
+                )
+            dataset_id = arguments['<dataset_id>']
 
-            # Create the table
-            try:
-                Binding.__table__.create(engine)
-            except ProgrammingError as e:
-                # Catch these here because this is our first attempt to
-                # actually use the DB
-                if 'already exists' in str(e):
-                    raise CLIError(
-                        'Destination table already exists. Specify a new table'
-                        ' name with -t.'
-                    )
-                raise CLIError('Error creating destination table: %s' % str(e))
+        if arguments['hud']:
+            source = sc.Hud(arguments['<site>'])
 
-            num_rows, data = get_data(api, dataset_id, client)
-            bar = FillingCirclesBar('  ▶ Loading from API', max=num_rows)
+        source.find_metadata()
 
-            # Iterate the dataset and INSERT each page
-            if api == "Socrata":
-                for page in data:
-                    insert_data(page, session, bar, Binding)
+        #get defaults
+        if arguments['-d']:
+            source.db_name = arguments['-d'][1:]
 
-            if api == "HUD":
-                insert_data(data, session, bar, Binding)
+        if arguments['-t']:
+            source.tbl_name = arguments['-t'][1:]
+        else:
+            source.default_tbl_name()
 
-            bar.finish()
+        get_connection(source)
+        get_binding(source)
 
-            ui.item(
-                'Committing rows (this can take a bit for large datasets).'
-            )
-            session.commit()
+        # Create the table
+        try:
+            source.binding.__table__.create(source.engine)
+        except ProgrammingError as e:
+            # Catch these here because this is our first attempt to
+            # actually use the DB
+            if 'already exists' in str(e):
+                raise CLIError(
+                    'Destination table already exists. Specify a new table'
+                    ' name with -t.'
+                )
+            raise CLIError('Error creating destination table: %s' % str(e))
 
-            success = 'Successfully imported %s rows.' % (
-                num_rows
-            )
-            ui.header(success, color='\033[92m')
-        if client:
-            client.close()
+        num_rows, data = source.get_data()
+        bar = FillingCirclesBar('  ▶ Loading from source', max=num_rows)
+
+        # Iterate the dataset and INSERT each page
+
+        if arguments['Socrata']:
+            for page in data:
+                insert_data(page, session, bar, Binding)
+
+        if arguments['hud']:
+            insert_data(data, source.session, bar, source.binding)
+
+        bar.finish()
+
+        ui.item(
+            'Committing rows (this can take a bit for large datasets).'
+        )
+        source.session.commit()
+
+        success = 'Successfully imported %s rows.' % (
+            num_rows
+        )
+        ui.header(success, color='\033[92m')
+        if source.client:
+            source.client.close()
     except CLIError as e:
         ui.header(str(e), color='\033[91m')
 
