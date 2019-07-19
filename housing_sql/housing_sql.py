@@ -6,8 +6,8 @@ This file is adapted from a forked copy of DallasMorningNews/socrata2sql
 
 Usage:
   housing_sql.py hud <site> [-d=<database_url>] [-t=<table_name>]
-  housing_sql.py Socrata <site> <dataset_id> [-a=<app_token>] [-d=<database_url>] [-t=<table_name>]
-  housing_sql.py Census <dataset> <year> <table> <geography> <api_key> [-d=<database_url>] [-t=<table_name>]
+  housing_sql.py socrata <site> <dataset_id> [-a=<app_token>] [-d=<database_url>] [-t=<table_name>]
+  housing_sql.py census <dataset> <year> <table> <geography> <api_key> [-d=<database_url>] [-t=<table_name>]
   housing_sql.py csv (<location> | <site>) [-d=<database_url>] [-t=<table_name>]
   housing_sql.py shp (<location> | <site>) [-d=<database_url>] [-t=<table_name>]
   housing_sql.py (-h | --help)
@@ -44,35 +44,18 @@ Examples:
   Load Sandy Damage Estimates from HUD into a PostgreSQL database called mydb:
   $ housing_sql.py HUD "https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/FemaDamageAssessmnts_01172013_new/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=json" -d=postgresql:///mydb
 """
-from os import path
-import re
-import json
-import urllib.request
-
 from docopt import docopt
-from geoalchemy2.types import Geometry
 from progress.bar import FillingCirclesBar
-from sodapy import Socrata
 from sqlalchemy import Column
 from sqlalchemy import create_engine
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.types import Boolean
-from sqlalchemy.types import DateTime
 from sqlalchemy.types import Integer
-from sqlalchemy.types import Numeric
-from sqlalchemy.types import Text
-from tabulate import tabulate
 
 #from socrata2sql.socrata2sql import __version__
 import source_classes as sc
 from exceptions import CLIError
-from parsers import parse_datetime
-from parsers import parse_geom
-from parsers import parse_str
-from sources import socrata, hud
 import ui
 
 
@@ -124,7 +107,6 @@ def get_binding(source):
 
         except NotImplementedError as e:
             ui.item('%s' % str(e))
-            continue
 
     source.binding = type('DataRecord', (declarative_base(),), record_fields)
 
@@ -164,65 +146,24 @@ def get_connection(source):
         ui.item('Query "%s" failed. Geometry columns will be skipped.' % gis_q)
 
 
-def parse_row(row, binding):
-    """Parse API data into the Python types our binding expects"""
-    parsers = {
-        # This maps SQLAlchemy types (key) to functions that return their
-        # expected Python type from the raw Socrata data.
-        DateTime: parse_datetime,
-        Geometry: parse_geom,
-        Text: parse_str,
-    }
-
-    parsed = {}
-    for col_name, col_val in row.items():
-        col_name = col_name.lower()
-        binding_columns = binding.__mapper__.columns
-
-        if col_name not in binding_columns:
-            # We skipped this column when creating the binding; skip it now too
-            continue
-
-        mapper_col_type = type(binding_columns[col_name].type)
-
-        if mapper_col_type in parsers:
-            parsed[col_name] = parsers[mapper_col_type](col_val)
-        else:
-            parsed[col_name] = col_val
-
-    return parsed
-
-def insert_data(page, session, bar, Binding):
-    to_insert = []
-    for row in page:
-        to_insert.append(Binding(**parse_row(row, Binding)))
-    session.add_all(to_insert)
-    bar.next(n=len(to_insert))
-    return
-
-
 def main():
 
     arguments = docopt(__doc__)
 
-    print(arguments)
-
 
     try:
 
-        #Get metadata to create binding      
-        if arguments['Socrata']:
-            source = socrata
-            client, metadata = source.find_metadata(
-                arguments['<site>'], arguments['<dataset_id>'], arguments['-a']
-                )
-            dataset_id = arguments['<dataset_id>']
+        #Create source objects    
+        if arguments['socrata']:
+            source = sc.SocrataPortal(
+                arguments['<site>'], arguments['<dataset_id>'], \
+                (arguments['-a'][1:] if arguments['-a'] else None)
+            )
 
         if arguments['hud']:
-            source = sc.Hud(arguments['<site>'])
+            source = sc.HudPortal(arguments['<site>'])
 
         source.find_metadata()
-
         #get defaults
         if arguments['-d']:
             source.db_name = arguments['-d'][1:]
@@ -231,7 +172,6 @@ def main():
             source.tbl_name = arguments['-t'][1:]
         else:
             source.default_tbl_name()
-
         get_connection(source)
         get_binding(source)
 
@@ -248,19 +188,12 @@ def main():
                 )
             raise CLIError('Error creating destination table: %s' % str(e))
 
-        num_rows, data = source.get_data()
-        bar = FillingCirclesBar('  ▶ Loading from source', max=num_rows)
+        source.get_data()
+        circle_bar = FillingCirclesBar('  ▶ Loading from source', max=source.num_rows)
 
-        # Iterate the dataset and INSERT each page
+        source.insert(circle_bar)
 
-        if arguments['Socrata']:
-            for page in data:
-                insert_data(page, session, bar, Binding)
-
-        if arguments['hud']:
-            insert_data(data, source.session, bar, source.binding)
-
-        bar.finish()
+        circle_bar.finish()
 
         ui.item(
             'Committing rows (this can take a bit for large datasets).'
@@ -268,7 +201,7 @@ def main():
         source.session.commit()
 
         success = 'Successfully imported %s rows.' % (
-            num_rows
+            source.num_rows
         )
         ui.header(success, color='\033[92m')
         if source.client:
