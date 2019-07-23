@@ -8,8 +8,9 @@ Usage:
   housing_sql.py hud <site> [-d=<database_url>] [-t=<table_name>]
   housing_sql.py socrata <site> <dataset_id> [-a=<app_token>] [-d=<database_url>] [-t=<table_name>]
   housing_sql.py census <dataset> <year> <table> <geography> <api_key> [-d=<database_url>] [-t=<table_name>]
-  housing_sql.py csv (<location> | <site>) [-d=<database_url>] [-t=<table_name>]
-  housing_sql.py shp (<location> | <site>) [-d=<database_url>] [-t=<table_name>]
+  housing_sql.py csv (-p=<path> | -u=<url>) [-d=<database_url>] [-t=<table_name>]
+  housing_sql.py excel (-p=<path> | -u=<url>) [-d=<database_url>] [-t=<table_name>]
+  housing_sql.py shp (-p=<path> | -u=<url>) [-d=<database_url>] [-t=<table_name>]
   housing_sql.py (-h | --help)
   housing_sql.py (-v | --version)
 
@@ -22,6 +23,8 @@ Options:
   <dataset_id>       The ID of the dataset on Socrata's open data site. This is 
                      usually a few characters, separated by a hyphen, at the end 
                      of the URL. Ex: 64pp-jeba
+  -p=<path>          Path to the location where the file is stored.
+  -u=<url>           URL hyperlink where file can be downloaded.
   -d=<database_url>  Database connection string for destination database as
                      diacdlect+driver://username:password@host:port/database.
                      Default: sqlite:///<source name>.sqlite
@@ -41,8 +44,8 @@ Examples:
   Load it into a PostgreSQL database called mydb:
   $ housing_sql.py Socrata www.dallasopendata.com 64pp-jeba -d"postgresql:///mydb"
 
-  Load Sandy Damage Estimates from HUD into a PostgreSQL database called mydb:
-  $ housing_sql.py HUD "https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/FemaDamageAssessmnts_01172013_new/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=json" -d=postgresql:///mydb
+  Load Public Housing Buildings from HUD into a PostgreSQL database called mydb:
+  $ housing_sql.py hud "https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/Public_Housing_Buildings/FeatureServer/0/query?outFields=*&where=1%3D1" -d=postgresql:///mydb
 """
 from docopt import docopt
 from progress.bar import FillingCirclesBar
@@ -77,9 +80,8 @@ def get_binding(source):
 
     geo_types = ('location', 'point', 'multipolygon', 'esriFieldTypeGeometry')
 
-    for col in source.metadata:
-        col_name, col_type = source.format_col(col)
-
+    for col_name, col_type in source.metadata:
+        
         if col_type in geo_types and source.geo is False:
             msg = (
                 '"%s" is a %s column but your database doesn\'t support '
@@ -91,19 +93,13 @@ def get_binding(source):
         if col_name.startswith(':@computed'):
             ui.item('Ignoring computed column "%s".' % col_name)
             continue
-
+        
         try:
-            print(col_name, ": ", col_type)
+          print(col_name, ": ", col_type)
+          assert (col_type), 'Unable to map %s type to a SQL type.' % (
+                  source.name)
 
-            try:
-                record_fields[col_name] = Column(
-                    source.col_mappings[col_type]
-                )
-            except KeyError:
-                msg = 'Unable to map %s type "%s" to a SQL type.' % (
-                    source.name, col_data_type
-                )
-                raise NotImplementedError(msg)
+          record_fields[col_name] = Column(col_type)
 
         except NotImplementedError as e:
             ui.item('%s' % str(e))
@@ -126,9 +122,8 @@ def get_connection(source):
     source.session = Session()
 
     # Check for PostGIS support
-    gis_q = 'SELECT PostGIS_version();'
     try:
-        source.session.execute(gis_q)
+        source.session.execute('SELECT PostGIS_version();')
         source.geo = True
     except OperationalError:
         source.geo = False
@@ -150,6 +145,7 @@ def main():
 
     arguments = docopt(__doc__)
 
+    print(arguments)
 
     try:
 
@@ -163,15 +159,13 @@ def main():
         if arguments['hud']:
             source = sc.HudPortal(arguments['<site>'])
 
-        source.find_metadata()
         #get defaults
         if arguments['-d']:
             source.db_name = arguments['-d'][1:]
 
         if arguments['-t']:
             source.tbl_name = arguments['-t'][1:]
-        else:
-            source.default_tbl_name()
+
         get_connection(source)
         get_binding(source)
 
@@ -188,7 +182,6 @@ def main():
                 )
             raise CLIError('Error creating destination table: %s' % str(e))
 
-        source.get_data()
         circle_bar = FillingCirclesBar('  ▶ Loading from source', max=source.num_rows)
 
         source.insert(circle_bar)
@@ -204,7 +197,7 @@ def main():
             source.num_rows
         )
         ui.header(success, color='\033[92m')
-        if source.client:
+        if source.name == "Socrata" and source.client:
             source.client.close()
     except CLIError as e:
         ui.header(str(e), color='\033[91m')
