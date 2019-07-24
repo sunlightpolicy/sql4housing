@@ -155,16 +155,25 @@ def main():
 
         #Create source objects    
         if arguments['socrata']:
-          source = sc.SocrataPortal(
-              arguments['<site>'], arguments['<dataset_id>'], \
-              (arguments['-a'][1:] if arguments['-a'] else None)
-          )
+            source = sc.SocrataPortal(
+                arguments['<site>'], arguments['<dataset_id>'], \
+                (arguments['-a'][1:] if arguments['-a'] else None)
+            )
 
         if arguments['hud']:
-          source = sc.HudPortal(arguments['<site>'])
+            source = sc.HudPortal(arguments['<site>'])
 
         if arguments['excel']:
-          source = sc.ExcelFile(arguments['-u'][1:])
+            if arguments['-u']:
+                source = sc.Excel(arguments['-u'][1:], True)
+            if arguments['-p']:
+                source = sc.Excel(arguments['-p'][1:], False)
+
+        if arguments['csv']:
+            if arguments['-u']:
+                source = sc.Csv(arguments['-u'][1:], True)
+            if arguments['-p']:
+                source = sc.Csv(arguments['-p'][1:], False)
 
         #get defaults
         if arguments['-d']:
