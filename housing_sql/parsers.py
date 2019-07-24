@@ -22,44 +22,43 @@ def parse_datetime(str_val, srid=None):
 
 
 def parse_geom(geo_data, srid):
-    """Parse a variety of Socrata location types into EWKT strings
-
-    See https://dev.socrata.com/docs/datatypes/location.html and
-    https://dev.socrata.com/docs/datatypes/point.html
     """
+    TO DO: add code to parse other socrata geometry types
+    make parsers object oriented
+    """
+
     if geo_data is None:
         return None
-    '''
+    
     if 'latitude' in geo_data and 'longitude' in geo_data:
-        return 'SRID=4326;POINT(%s %s)' % (
+        return 'SRID=%s;POINT(%s %s)' % (
+            srid,
             geo_data['latitude'],
             geo_data['longitude'],
         )
     elif 'human_address' in geo_data and 'latitude' not in geo_data:
         return None
-
+    else:
+        wkt_text = shape(geo_data).wkt
+    
+        return ";".join(["SRID=%s" % srid, shape(geo_data).wkt])
+    '''
     if geo_data['type'] == 'Point':
-        return 'SRID=4326;POINT(%s %s)' % (
+        return 'SRID=%s;POINT(%s %s)' % (
+            srid,
             geo_data['coordinates'][0],
             geo_data['coordinates'][1],
         )
+    
+
+    try:
+
+    
+
+    except:
+
+       raise NotImplementedError('%s are not yet supported' % geo_data['type'])
     '''
-
-    #try:
-
-    '''
-    if geo_data['type'] == 'MultiPolygon':
-        wkt_text = wkt.dumps(geo_data)
-    else:
-        wkt_text = shape(geo_data).wkt
-    if geo_data['type'] == 'Polygon':
-        wkt_text = wkt_text.replace('POLYGON', 'MULTIPOLYGON(') + ')'
-    '''
-    return ";".join(["SRID=%s" % srid, shape(geo_data).wkt])
-    #except:
-
-    #   raise NotImplementedError('%s are not yet supported' % geo_data['type'])
-
 
 def parse_str(raw_str, srid=None):
     if isinstance(raw_str, dict):

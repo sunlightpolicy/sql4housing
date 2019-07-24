@@ -14,24 +14,29 @@ class ExcelFile:
     #TO BE COMPLETED
     def __init__(self, location):
         self.location = location
-        self.name = "Excel File"
-        self.tbl_name = utils.get_table_name(
-            self.xls).sheet_names[0]
-        self.db_name = "postgres:///kcmo_db"
-        self.session = None
-        self.engine = None
-        self.geo = None
-        self.xls = pd.ExcelFile(urllib.request.urlopen(location))
-        self.metadata = [(col_name.lower().replace(" ", "_"), col_type) \
-            for (col_name, col_type) in \
-            dict(self.xls.parse(self.xls.sheet_names[0]).dtypes).items()]
         self.col_mappings = {np.dtype(object): Text,
             np.dtype(int): Integer,
             np.dtype(float): Numeric,
             np.dtype('<M8[ns]'): DateTime}
+        self.xls = pd.ExcelFile(urllib.request.urlopen(location))
+        self.name = "Excel File"
+        self.tbl_name = utils.get_table_name(
+            self.xls.sheet_names[0])
+        self.db_name = "postgres:///kcmo_db"
+        self.session = None
+        self.engine = None
+        self.geo = False
+        self.metadata = [
+            (col_name.lower().replace(" ", "_"), self.col_mappings[col_type]) \
+            for (col_name, col_type) in \
+            dict(self.xls.parse(self.xls.sheet_names[0]).dtypes).items()]
         self.binding = None
         self.num_rows = pd.read_excel(self.xls).shape[0]
-        self.data = None
+        self.data = pd.read_excel(self.xls).to_dict(orient='records')
+
+    def insert(self, circle_bar):
+        utils.insert_data(self.data, self.session, circle_bar, self.binding)
+        return
 
 
 class SocrataPortal:
@@ -89,7 +94,8 @@ class SocrataPortal:
 
     def insert(self, circle_bar):
         for page in self.data:
-            utils.insert_data(page, self.session, circle_bar, self.binding, self.srid)
+            utils.insert_data(
+                page, self.session, circle_bar, self.binding, self.srid)
         pass
 
 

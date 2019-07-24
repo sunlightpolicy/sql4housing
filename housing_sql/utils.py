@@ -14,7 +14,7 @@ def get_table_name(raw_str):
     no_spaces = raw_str.replace(' ', '_')
     return re.sub(r'\W', '', no_spaces).lower()
 
-def insert_data(page, session, circle_bar, Binding, srid):
+def insert_data(page, session, circle_bar, Binding, srid=None):
     to_insert = []
     for row in page:
         to_insert.append(Binding(**parse_row(row, Binding, srid)))
@@ -26,6 +26,7 @@ def insert_data(page, session, circle_bar, Binding, srid):
 def parse_row(row, binding, srid):
     """Parse API data into the Python types our binding expects"""
     parsers = {
+        # TO DO: move to classes
         # This maps SQLAlchemy types (key) to functions that return their
         # expected Python type from the raw Socrata data.
         DateTime: parse_datetime,

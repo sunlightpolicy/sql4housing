@@ -46,6 +46,9 @@ Examples:
 
   Load Public Housing Buildings from HUD into a PostgreSQL database called mydb:
   $ housing_sql.py hud "https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/Public_Housing_Buildings/FeatureServer/0/query?outFields=*&where=1%3D1" -d=postgresql:///mydb
+
+  Load Public Housing Physical Inspection scores into a PostgreSQL database called mydb:
+  $ housing_sql.py excel "http://www.huduser.org/portal/datasets/pis/public_housing_physical_inspection_scores.xlsx" -d=postgresql:///mydb
 """
 from docopt import docopt
 from progress.bar import FillingCirclesBar
@@ -53,6 +56,7 @@ from sqlalchemy import Column
 from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.declarative import declarative_base
+from geoalchemy2.types import Geometry
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import Integer
 
@@ -75,14 +79,14 @@ def get_binding(source):
     }
 
     ui.header(
-        'Setting up new table, "%s", from %s source fields' % (source.tbl_name, source.name)
+        'Setting up new table, "%s", from %s source fields' % (
+          source.tbl_name, source.name)
     )
 
-    geo_types = ('location', 'point', 'multipolygon', 'esriFieldTypeGeometry')
-
     for col_name, col_type in source.metadata:
-        
-        if col_type in geo_types and source.geo is False:
+
+        if type(col_type) == type(Geometry()) and source.geo is False:
+
             msg = (
                 '"%s" is a %s column but your database doesn\'t support '
                 'PostGIS so it\'ll be skipped.'
@@ -151,13 +155,16 @@ def main():
 
         #Create source objects    
         if arguments['socrata']:
-            source = sc.SocrataPortal(
-                arguments['<site>'], arguments['<dataset_id>'], \
-                (arguments['-a'][1:] if arguments['-a'] else None)
-            )
+          source = sc.SocrataPortal(
+              arguments['<site>'], arguments['<dataset_id>'], \
+              (arguments['-a'][1:] if arguments['-a'] else None)
+          )
 
         if arguments['hud']:
-            source = sc.HudPortal(arguments['<site>'])
+          source = sc.HudPortal(arguments['<site>'])
+
+        if arguments['excel']:
+          source = sc.ExcelFile(arguments['-u'][1:])
 
         #get defaults
         if arguments['-d']:
