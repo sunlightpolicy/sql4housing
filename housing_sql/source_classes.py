@@ -11,10 +11,15 @@ import pandas as pd
 import xlrd
 import numpy as np
 import string
+import shapefile
+import zipfile
+import io
+import requests
 
 class Spreadsheet:
     def __init__(self, location, has_url):
         self.location = location
+        self.has_url = has_url
         self.col_mappings = {np.dtype(object): Text,
             np.dtype('int64'): BigInteger,
             np.dtype('int32'): Integer,
@@ -30,7 +35,7 @@ class Spreadsheet:
 
     def insert(self, circle_bar):
         utils.insert_data(self.data, self.session, circle_bar, self.binding)
-        return
+        return 
 
 class Excel(Spreadsheet):
     '''
@@ -40,36 +45,74 @@ class Excel(Spreadsheet):
         Spreadsheet.__init__(self, location, has_url)
         self.xls = pd.ExcelFile(urllib.request.urlopen(location)) if has_url \
             else pd.ExcelFile(location)
-        self.df = self.xls.parse()
+        self.df = utils.edit_columns(self.xls.parse())
         self.name = "Excel File"
         self.tbl_name = self.xls.sheet_names[0].lower()
-        self.metadata = [
-            (col_name.lower().replace(" ", "_"), self.col_mappings[col_type]) \
-            for (col_name, col_type) in \
-            dict(self.df.dtypes).items()]
+        self.metadata = utils.spreadsheet_metadata(self)
         self.num_rows = self.df.shape[0]
         self.data = self.df.to_dict(orient='records')
 
 class Csv(Spreadsheet):
     def __init__(self, location, has_url):
         Spreadsheet.__init__(self, location, has_url)
-        self.df = pd.read_csv(urllib.request.urlopen(location)) if has_url \
-            else pd.read_csv(location)
+        self.df = utils.edit_columns(
+            pd.read_csv(urllib.request.urlopen(location)) if has_url \
+            else pd.read_csv(location))
         self.name = "CSV file"
-        #TO DO: FIGURE OUT REGEX FOR THIS. Also need to strip punctuation
-        self.tbl_name = re.search(
-            "(?<=://)[^\s]+(?=.csv)", location).group().lower() if has_url \
-            else re.search("[^\s]+(?=.csv)", location).group().lower()
-        self.metadata = [
-            (col_name.lower().replace(" ", "_"), self.col_mappings[col_type]) \
-            for col_name, col_type in \
-            dict(self.df.dtypes).items()]
+        self.tbl_name = self.__create_tbl_name()
+        self.metadata = utils.spreadsheet_metadata(self)
         self.num_rows = self.df.shape[0]
         self.data = self.df.to_dict(orient='records')
 
+    def __create_tbl_name(self):
+        pattern = "(?:(?<=http://)|(?<=https://))[^\s]+(?=.csv)" if \
+            self.has_url else "[^\s]+(?=.csv)"
+        sub_str = re.search(pattern, self.location).group().lower()
+        return \
+            re.compile('[%s]' % re.escape(string.punctuation)).sub("_", sub_str)
 
-class SocrataPortal:
+class SpatialFile:
+    def __init__(self, location, has_url):
+        self.location = location
+        self.has_url = has_url
+        self.engine = None
+        self.session = None
+        self.geo = None
+        self.binding = None
+        self.db_name = "postgres:///kcmo_db"
+
+class Shape(SpatialFile):
+    def __init__(self, location, has_url):
+        Spatial.__init__(self, location, has_url)
+        self.geo_json = self.__extract_file() if has_url \
+            else shapefile.Reader(location).__geo_interface__
+        self.data = [{k.lower().replace(' ', '_'): v} for k, v in \
+            self.geo_json['features'].items()]
+        #self.metadata = 
+
+    def __extract_file(self):
+        r = requests.get(self.location)
+        z = zipfile.ZipFile(io.BytesIO(r.content))
+        print("Extracting shapefile to folder")
+        z.extractall()
+        shp = [y for y in sorted(z.namelist()) for ending in \
+            ['dbf', 'prj', 'shp', 'shx'] if y.endswith(ending)][2]
+        return shapefile.Reader(shp).__geo_interface__
+
+
+class Portal:
+    def __init__(self, site):
+        self.site = site
+        self.engine = None
+        self.session = None
+        self.geo = None
+        self.binding = None
+        self.db_name = "postgres:///kcmo_db"
+
+
+class SocrataPortal(Portal):
     def __init__(self, site, dataset_id, app_token):
+        Portal.__init__(self, site)
         self.col_mappings = {
             'checkbox': Boolean,
             'url': Text,
@@ -81,29 +124,38 @@ class SocrataPortal:
             'multipolygon': Geometry(geometry_type='MULTIPOLYGON', srid=4326)
             }
         self.site = site
-        self.name = "Socrata"
-        self.db_name = "postgres:///kcmo_db"
+        self.name = "Socrata"  
         self.dataset_id = dataset_id
         self.app_token = app_token
         self.client = Socrata(self.site, self.app_token)
         self.tbl_name = utils.get_table_name(
             self.client.get_metadata(self.dataset_id)['name']
             ).lower()
-        self.metadata = [(
-            col['fieldName'].lower(), self.col_mappings[col['dataTypeName']]) \
-            for col in self.client.get_metadata(self.dataset_id)['columns']]
+        self.metadata = self.__get_metadata()
         self.srid=4326
-        self.engine = None
-        self.session = None
-        self.geo = None
-        self.binding = None
+
         self.num_rows = int(
             self.client.get(
                 self.dataset_id, select='COUNT(*) AS count')[0]['count'])
         self.data = self.__get_socrata_data(5000)
 
+    def __get_metadata(self):
+
+        print("Gathering metadata")
+        print() 
+        metadata = []
+        for col in self.client.get_metadata(self.dataset_id)['columns']:
+            print(col['fieldName'], ":", col['dataTypeName'])
+            metadata.append(
+                (col['fieldName'], self.col_mappings[col['dataTypeName']]))
+        return metadata
+
+
+
     def __get_socrata_data(self, page_size=5000):
         """Iterate over a datasets pages using the Socrata API"""
+        print("Gathering data")
+        print()
         page_num = 0
         more_pages = True
 
@@ -113,7 +165,6 @@ class SocrataPortal:
                 limit=page_size,
                 offset=page_size * page_num,
             )
-
 
             if len(api_data) < page_size:
                 more_pages = False
@@ -128,11 +179,10 @@ class SocrataPortal:
         pass
 
 
-class HudPortal:
+class HudPortal(Portal):
     def __init__(self, site):
-        self.site = site
+        Portal.__init__(self, site)
         self.name = "HUD"
-        self.db_name = "postgres:///kcmo_db"
         self.description = str(
             urllib.request.urlopen(
                 re.search('.*FeatureServer/', self.site).group()
@@ -145,10 +195,6 @@ class HudPortal:
             urllib.request.urlopen(
                 self.site + "&outFields=*&outSR=4326&f=json").read())
         self.srid = self.data_info['spatialReference']['wkid']
-        self.engine = None
-        self.session = None
-        self.geo = None
-        self.binding = None
         self._query = '' if "1%3D1" in \
             re.search("where=\S*", self.site).group() else \
             re.search("where=\S*", self.site).group()
@@ -165,12 +211,11 @@ class HudPortal:
             'esriFieldTypeSingle': Numeric,
             'esriFieldTypeDate': DateTime,
             'esriFieldTypeGlobalID': Text}
-        self.metadata = [(col['name'].lower(), self.col_mappings[col['type']]) \
-            for col in self.data_info['fields']] + \
-                [('geometry', Geometry(
-                    geometry_type='GEOMETRY', srid=self.srid))]
-    
+        self.metadata = self.__get_metadata()
+
     def _get_data(self):
+        print("Gathering data")
+        print()
         data = json.loads(
             urllib.request.urlopen(
                 'https://opendata.arcgis.com/datasets/%s_0.geojson%s' %
@@ -178,12 +223,27 @@ class HudPortal:
             ).read())['features']
         new_data = []
         for row in data:
-            output = row['properties']
+            output = \
+                {k.lower().replace(" ", "_"): v \
+                for k, v in row['properties'].items()}
             output['geometry'] = row['geometry']
             new_data.append(output)
         return new_data
 
+    def __get_metadata(self):
+        print("Gathering metadata")
+        print()
+        metadata = []
+        for col in self.data_info['fields']:
+            col_name = col['name'].lower().replace(" ", "_")
+            print(col_name, ": ", col['type'])
+            metadata.append((col_name, self.col_mappings[col['type']]))
+        metadata.append(('geometry', \
+            Geometry(geometry_type='GEOMETRY', srid=self.srid)))
+        return metadata
+
     def insert(self, circle_bar):
+        print("Inserting data")
         utils.insert_data(
             self.data, self.session, circle_bar, self.binding, self.srid)
         return

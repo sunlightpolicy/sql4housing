@@ -39,10 +39,10 @@ Examples:
 
   Load the Dallas check register into a local SQLite file (file name chosen
   from the dataset name):
-  $ housing_sql.py Socrata www.dallasopendata.com 64pp-jeba
+  $ housing_sql.py socrata www.dallasopendata.com 64pp-jeba
 
   Load it into a PostgreSQL database called mydb:
-  $ housing_sql.py Socrata www.dallasopendata.com 64pp-jeba -d"postgresql:///mydb"
+  $ housing_sql.py socrata www.dallasopendata.com 64pp-jeba -d"postgresql:///mydb"
 
   Load Public Housing Buildings from HUD into a PostgreSQL database called mydb:
   $ housing_sql.py hud "https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/Public_Housing_Buildings/FeatureServer/0/query?outFields=*&where=1%3D1" -d=postgresql:///mydb
@@ -96,13 +96,13 @@ def get_binding(source):
 
         if col_name.startswith(':@computed'):
             ui.item('Ignoring computed column "%s".' % col_name)
+
             continue
         
         try:
-          print(col_name, ": ", col_type)
+
           assert (col_type), 'Unable to map %s type to a SQL type.' % (
                   source.name)
-
           record_fields[col_name] = Column(col_type)
 
         except NotImplementedError as e:

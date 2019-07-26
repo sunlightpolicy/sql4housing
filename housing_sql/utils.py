@@ -23,6 +23,11 @@ def insert_data(page, session, circle_bar, Binding, srid=None):
 
     return
 
+def edit_columns(df):
+    df.columns = \
+        [col_name.lower().replace(" ", "_") for col_name in df.columns]
+    return df
+
 def parse_row(row, binding, srid):
     """Parse API data into the Python types our binding expects"""
     parsers = {
@@ -35,19 +40,50 @@ def parse_row(row, binding, srid):
     }
 
     parsed = {}
+    binding_columns = binding.__mapper__.columns
     for col_name, col_val in row.items():
         col_name = col_name.lower()
-        binding_columns = binding.__mapper__.columns
+        
         if col_name not in binding_columns:
             # We skipped this column when creating the binding; skip it now too
-
             continue
-
         mapper_col_type = type(binding_columns[col_name].type)
-
         if mapper_col_type in parsers:
             parsed[col_name] = parsers[mapper_col_type](col_val, srid)
         else:
             parsed[col_name] = col_val
 
     return parsed
+
+def convert_types(string):
+    '''
+    Takes a string and returns the type it represents.
+    i.e. '500 w addison st' returns str, '80.4' returns float, '5' returns int.
+    '''
+
+    for c in [int, float, str]:
+        try:
+            return c(val)
+        except ValueError:
+            pass
+    return val
+
+def create_metadata(data_list):
+    metadata = {}
+    for col_name in data_list[0].keys():
+        for record in data_list:
+            if record[col_name]:
+                metadata[col_name] = type(record[col_name])
+            else:
+                continue
+    return metadata
+
+def spreadsheet_metadata(spreadsheet):
+        print("Gathering metadata")
+        print()
+        metadata = []
+        for col_name, col_type in dict(spreadsheet.df.dtypes).items():
+            print(col_name, ":", col_type)
+            metadata.append((col_name, spreadsheet.col_mappings[col_type]))
+        return metadata
+
