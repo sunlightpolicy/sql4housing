@@ -40,7 +40,7 @@ def parse_geom(geo_data, srid):
         return None
     else:
         wkt_text = shape(geo_data).wkt
-    
+
         return ";".join(["SRID=%s" % srid, shape(geo_data).wkt])
     '''
     if geo_data['type'] == 'Point':

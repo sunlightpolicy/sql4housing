@@ -65,8 +65,8 @@ class Csv(Spreadsheet):
         self.data = self.df.to_dict(orient='records')
 
     def __create_tbl_name(self):
-        pattern = "(?:(?<=http://)|(?<=https://))[^\s]+(?=.csv)" if \
-            self.has_url else "[^\s]+(?=.csv)"
+        pattern = "(?:(?<=http://)|(?<=https://))[^\s]+(?=\.csv)" if \
+            self.has_url else "[^\s]+(?=\.csv)"
         sub_str = re.search(pattern, self.location).group().lower()
         return \
             re.compile('[%s]' % re.escape(string.punctuation)).sub("_", sub_str)
@@ -80,24 +80,70 @@ class SpatialFile:
         self.geo = None
         self.binding = None
         self.db_name = "postgres:///kcmo_db"
+        self.col_mappings = {
+            str: Text,
+            int : Integer,
+            float: Numeric
+            }
 
 class Shape(SpatialFile):
     def __init__(self, location, has_url):
-        Spatial.__init__(self, location, has_url)
-        self.geo_json = self.__extract_file() if has_url \
-            else shapefile.Reader(location).__geo_interface__
-        self.data = [{k.lower().replace(' ', '_'): v} for k, v in \
-            self.geo_json['features'].items()]
-        #self.metadata = 
+        SpatialFile.__init__(self, location, has_url)
+        self.name = "Shapefile"
+        self.tbl_name, self.geojson = self.__extract_file()
+        self.data = utils.geojson_data(self.geojson)
+        self.metadata = utils.create_metadata(self.data, self.col_mappings)
+        self.num_rows = len(self.data)
 
     def __extract_file(self):
-        r = requests.get(self.location)
-        z = zipfile.ZipFile(io.BytesIO(r.content))
-        print("Extracting shapefile to folder")
-        z.extractall()
-        shp = [y for y in sorted(z.namelist()) for ending in \
+        if self.has_url:
+            z = zipfile.ZipFile(io.BytesIO(requests.get(self.location).content))
+            print("Extracting shapefile to folder")
+            print()
+            z.extractall()
+            shp = [y for y in sorted(z.namelist()) for ending in \
             ['dbf', 'prj', 'shp', 'shx'] if y.endswith(ending)][2]
-        return shapefile.Reader(shp).__geo_interface__
+        else:
+            shp = self.location
+        print("Reading shapefile")
+        print()
+        #set default table name
+        tbl_name = shp[shp.rfind("/") + 1:-4].lower()
+        tbl_name = re.compile(
+            '[%s]' % re.escape(string.punctuation)).sub("_", tbl_name)
+        return tbl_name, shapefile.Reader(shp).__geo_interface__
+
+    def insert(self, circle_bar):
+        print("Inserting data")
+        utils.insert_data(
+            self.data, self.session, circle_bar, self.binding)
+        return
+
+class GeoJson(SpatialFile):
+    def __init__(self, location, has_url):
+        SpatialFile.__init__(self, location, has_url)
+        self.name = "GeoJSON"
+        self.data = utils.geojson_data(
+            json.loads(urllib.request.urlopen(location).read()) if has_url \
+            else json.loads(location))
+        self.metadata = utils.create_metadata(self.data, self.col_mappings)
+        self.num_rows = len(self.data)
+        self.tbl_name = self.__create_tbl_name()
+
+    def insert(self, circle_bar):
+        print("Inserting data")
+        utils.insert_data(
+            self.data, self.session, circle_bar, self.binding)
+        return
+
+    def __create_tbl_name(self):
+        pattern = ("(?:(?<=http://)|(?<=https://))[^\s]+(?:" + \
+        "(?=\.geojson)|(?=\?method=export&format=GeoJSON))") if \
+        self.has_url else ("[^\s]+(?:" + \
+        "(?=\.geojson)|(?=\?method=export&format=GeoJSON))")
+        sub_str = re.search(pattern, self.location).group().lower()
+        return \
+            re.compile('[%s]' % re.escape(string.punctuation)).sub("_", sub_str)
 
 
 class Portal:
@@ -175,7 +221,7 @@ class SocrataPortal(Portal):
     def insert(self, circle_bar):
         for page in self.data:
             utils.insert_data(
-                page, self.session, circle_bar, self.binding, self.srid)
+                page, self.session, circle_bar, self.binding, srid=self.srid)
         pass
 
 
@@ -214,21 +260,10 @@ class HudPortal(Portal):
         self.metadata = self.__get_metadata()
 
     def _get_data(self):
-        print("Gathering data")
-        print()
-        data = json.loads(
-            urllib.request.urlopen(
-                'https://opendata.arcgis.com/datasets/%s_0.geojson%s' %
-                    (self._dataset_code, '?' + self._query)
-            ).read())['features']
-        new_data = []
-        for row in data:
-            output = \
-                {k.lower().replace(" ", "_"): v \
-                for k, v in row['properties'].items()}
-            output['geometry'] = row['geometry']
-            new_data.append(output)
-        return new_data
+        geojson = json.loads(urllib.request.urlopen(
+            'https://opendata.arcgis.com/datasets/%s_0.geojson%s' %
+            (self._dataset_code, '?' + self._query)).read())
+        return utils.geojson_data(geojson)
 
     def __get_metadata(self):
         print("Gathering metadata")
@@ -245,5 +280,5 @@ class HudPortal(Portal):
     def insert(self, circle_bar):
         print("Inserting data")
         utils.insert_data(
-            self.data, self.session, circle_bar, self.binding, self.srid)
+            self.data, self.session, circle_bar, self.binding, srid=self.srid)
         return

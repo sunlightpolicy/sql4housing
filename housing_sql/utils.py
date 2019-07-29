@@ -4,6 +4,8 @@ from progress.bar import FillingCirclesBar
 from parsers import parse_datetime, parse_geom, parse_str
 from sqlalchemy.types import DateTime, Text
 from geoalchemy2.types import Geometry
+import urllib
+import json
 
 def get_table_name(raw_str):
     """Transform a string into a suitable table name
@@ -14,14 +16,28 @@ def get_table_name(raw_str):
     no_spaces = raw_str.replace(' ', '_')
     return re.sub(r'\W', '', no_spaces).lower()
 
-def insert_data(page, session, circle_bar, Binding, srid=None):
+def insert_data(page, session, circle_bar, Binding, srid=4326):
     to_insert = []
+
     for row in page:
         to_insert.append(Binding(**parse_row(row, Binding, srid)))
     session.add_all(to_insert)
     circle_bar.next(n=len(to_insert))
 
     return
+
+def geojson_data(geojson):
+    print("Gathering data")
+    print()
+    data = geojson['features']
+    new_data = []
+    for row in data:
+        output = \
+            {k.lower().replace(" ", "_"): v \
+            for k, v in row['properties'].items()}
+        output['geometry'] = row['geometry']
+        new_data.append(output)
+    return new_data
 
 def edit_columns(df):
     df.columns = \
@@ -68,14 +84,20 @@ def convert_types(string):
             pass
     return val
 
-def create_metadata(data_list):
-    metadata = {}
-    for col_name in data_list[0].keys():
-        for record in data_list:
-            if record[col_name]:
-                metadata[col_name] = type(record[col_name])
-            else:
-                continue
+def create_metadata(data, mappings):
+    metadata = []
+    for col_name in data[0].keys():
+        for record in data:
+            if col_name == 'geometry':
+                metadata.append(
+                    (col_name, Geometry(geometry_type='GEOMETRY', srid=4326)))
+                break
+            elif record[col_name]:
+                #Need to convert python type to sqlalchemy type
+                py_type = type(record[col_name])
+                print(col_name, ":", py_type)
+                metadata.append((col_name, mappings[py_type]))
+                break
     return metadata
 
 def spreadsheet_metadata(spreadsheet):

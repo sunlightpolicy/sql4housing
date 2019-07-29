@@ -11,6 +11,7 @@ Usage:
   housing_sql.py csv (-p=<path> | -u=<url>) [-d=<database_url>] [-t=<table_name>]
   housing_sql.py excel (-p=<path> | -u=<url>) [-d=<database_url>] [-t=<table_name>]
   housing_sql.py shp (-p=<path> | -u=<url>) [-d=<database_url>] [-t=<table_name>]
+  housing_sql.py geojson (-p=<path> | -u=<url>) [-d=<database_url>] [-t=<table_name>]
   housing_sql.py (-h | --help)
   housing_sql.py (-v | --version)
 
@@ -174,6 +175,19 @@ def main():
                 source = sc.Csv(arguments['-u'][1:], True)
             if arguments['-p']:
                 source = sc.Csv(arguments['-p'][1:], False)
+
+        if arguments['shp']:
+            if arguments['-u']:
+                source = sc.Shape(arguments['-u'][1:], True)
+            if arguments['-p']:
+                source = sc.Shape(arguments['-p'][1:], False)
+
+        if arguments['geojson']:
+            if arguments['-u']:
+                source = sc.GeoJson(arguments['-u'][1:], True)
+            if arguments['-p']:
+                source = sc.GeoJson(arguments['-p'][1:], False)
+
 
         #get defaults
         if arguments['-d']:
