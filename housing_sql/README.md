@@ -3,7 +3,7 @@ This folder is based on a forked copy of Dallas Morning News' [socrata2sql](http
 -[HUD's Open Data Portal](https://hudgis-hud.opendata.arcgis.com/)<br>
 -Any locally saved .csv file or .csv hyperlink<br>
 -Any locally saved .shp file or .zip hyperlink containing a .shp file<br>
--Any locally saved .geojson file of .geojso hyperlink
+-Any locally saved .geojson file of .geojson hyperlink
 
 ## Requirements
 
