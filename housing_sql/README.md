@@ -67,3 +67,7 @@ Changes in usage will be periodically updated and documented within the docstrin
 	  Load Public Housing Physical Inspection scores into a PostgreSQL database called mydb:
 	  $ housing_sql.py excel "http://www.huduser.org/portal/datasets/pis/public_housing_physical_inspection_scores.xlsx" -d=postgresql:///mydb
 	"""
+
+## Example Use Case: Chicago
+
+![Alt text](hud_example.png "Public Housing Buildings")
