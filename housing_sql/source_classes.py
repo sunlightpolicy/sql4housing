@@ -1,3 +1,6 @@
+'''
+Classes to represent each data source.
+'''
 import urllib.request
 import json
 import utils
@@ -8,8 +11,6 @@ from geoalchemy2.types import Geometry
 from bs4 import BeautifulSoup
 from sodapy import Socrata
 import pandas as pd
-import geopandas as gpd
-import xlrd
 import numpy as np
 import string
 import shapefile
@@ -19,32 +20,37 @@ import requests
 import ui
 import time
 import warnings
-from geopandas_postgis import PostGIS
 
 class Spreadsheet:
+    '''
+    Parent class of Excel and Csv.
+    Uses pandas to read data and interpret data types.
+    '''
     def __init__(self, location):
         self.location = location
         self.col_mappings = {np.dtype(object): Text,
-            np.dtype('int64'): BigInteger,
-            np.dtype('int32'): Integer,
-            np.dtype('int16'): Integer,
-            np.dtype('int8'): Integer,
-            np.dtype(float): Numeric,
-            np.dtype('<M8[ns]'): DateTime,
-            np.dtype('bool'): Boolean}       
+                             np.dtype('int64'): BigInteger,
+                             np.dtype('int32'): Integer,
+                             np.dtype('int16'): Integer,
+                             np.dtype('int8'): Integer,
+                             np.dtype(float): Numeric,
+                             np.dtype('<M8[ns]'): DateTime,
+                             np.dtype('bool'): Boolean}    
         self.db_name = "postgresql:///mydb"
         self.session = None
         self.engine = None
         self.geo = False
-        self.binding = None 
+        self.binding = None
+        self.data = None
 
     def insert(self, circle_bar):
         utils.insert_data(self.data, self.session, circle_bar, self.binding)
-        return 
 
 class Excel(Spreadsheet):
     '''
-    defaults to reading the first sheet
+    Stores Excel file data.
+    Defaults to reading the first sheet and using the first sheet's name
+    as the table name.
     '''
     def __init__(self, location):
         Spreadsheet.__init__(self, location)
@@ -57,6 +63,10 @@ class Excel(Spreadsheet):
         self.data = self.df.to_dict(orient='records')
 
 class Csv(Spreadsheet):
+    '''
+    Stores csv file data.
+    Defaults to a sanitized version of the hyperlink or path as the table name.
+    '''
     def __init__(self, location):
         Spreadsheet.__init__(self, location)
         self.df = pd.read_csv(location)
@@ -67,13 +77,21 @@ class Csv(Spreadsheet):
         self.data = self.df.to_dict(orient='records')
 
     def __create_tbl_name(self):
-        pattern = "(?:(?<=http://)|(?<=https://))[^\s]+(?=\.csv)" if \
-            self.has_url else "[^\s]+(?=\.csv)"
+
+        pattern = "(?:(?<=http://)|(?<=https://))[^\s]+(?=\.csv)"
         sub_str = re.search(pattern, self.location).group().lower()
+
+        if not sub_str:
+            pattern = "[^\s]+(?=\.csv)"
+            sub_str = re.search(pattern, self.location).group().lower()
+
         return \
             re.compile('[%s]' % re.escape(string.punctuation)).sub("_", sub_str)
 
 class SpatialFile:
+    '''
+    Parent class of Shape and GeoJson
+    '''
     def __init__(self, location):
         self.location = location
         self.engine = None
@@ -88,6 +106,9 @@ class SpatialFile:
             bool: Boolean}
 
 class Shape(SpatialFile):
+    '''
+    Stores shapefile data.
+    '''
     def __init__(self, location):
         SpatialFile.__init__(self, location)
         self.name = "Shapefile"
@@ -95,9 +116,13 @@ class Shape(SpatialFile):
         self.data = utils.geojson_data(self.geojson)
         self.metadata = utils.create_metadata(self.data, self.col_mappings)
         self.num_rows = len(self.data)
-        self.gdf = None
 
     def __extract_file(self):
+        '''
+        Extracts data from zip files if a hyperlink is provided and reads
+        the saved shp file. Creates the default table name using a sanitized
+        version of the file's name.
+        '''
         try:
             z = zipfile.ZipFile(io.BytesIO(requests.get(self.location).content))
             ui.item("Extracting shapefile to folder")
@@ -115,28 +140,16 @@ class Shape(SpatialFile):
             '[%s]' % re.escape(string.punctuation)).sub("_", tbl_name)
         return tbl_name, shapefile.Reader(shp).__geo_interface__
 
-        '''
-        try:
-            return tbl_name, shapefile.Reader(shp).__geo_interface__
-
-        except:
-            geo = gpd.read_file(shp)
-            if geo.geometry.isnull().values.any():
-                warnings.warn(("File contains NULL geometries. " + \
-                    "These records will be dropped prior to upload.")) 
-                self.gdf = geo.loc[geo.geometry.notna()]
-        '''
-
-
 
     def insert(self, circle_bar):
-        if self.gdf:
-            self.gdf.postgis.to_postgis(con=self.engine, table_name=self.tbl_name)
         utils.insert_data(
             self.data, self.session, circle_bar, self.binding)
         return
 
 class GeoJson(SpatialFile):
+    '''
+    Stores geojson data
+    '''
     def __init__(self, location):
         SpatialFile.__init__(self, location)
         self.name = "GeoJSON"
@@ -159,8 +172,12 @@ class GeoJson(SpatialFile):
 
 
     def __create_tbl_name(self):
+        '''
+        Creates the default table name using a sanitized version of the
+        hyperlink or file name.
+        '''
         pattern = ("(?:(?<=http://)|(?<=https://))[^\s]+(?:" + \
-        "(?=\.geojson)|(?=\?method=export&format=GeoJSON))") 
+        "(?=\.geojson)|(?=\?method=export&format=GeoJSON))")
 
         sub_str = re.search(pattern, self.location).group().lower()
 
@@ -174,6 +191,9 @@ class GeoJson(SpatialFile):
 
 
 class Portal:
+    '''
+    Parent class of SocrataPortal and HudPortal.
+    '''
     def __init__(self, site):
         self.site = site
         self.engine = None
@@ -184,6 +204,9 @@ class Portal:
 
 
 class SocrataPortal(Portal):
+    '''
+    Stores SODA data.
+    '''
     def __init__(self, site, dataset_id, app_token):
         Portal.__init__(self, site)
         self.col_mappings = {
@@ -197,7 +220,7 @@ class SocrataPortal(Portal):
             'multipolygon': Geometry(geometry_type='MULTIPOLYGON', srid=4326)
             }
         self.site = site
-        self.name = "Socrata"  
+        self.name = "Socrata"
         self.dataset_id = dataset_id
         self.app_token = app_token
         self.client = Socrata(self.site, self.app_token)
@@ -205,7 +228,7 @@ class SocrataPortal(Portal):
             self.client.get_metadata(self.dataset_id)['name']
             ).lower()
         self.metadata = self.__get_metadata()
-        self.srid=4326
+        self.srid = 4326
 
         self.num_rows = int(
             self.client.get(
@@ -213,7 +236,9 @@ class SocrataPortal(Portal):
         self.data = self.__get_socrata_data(5000)
 
     def __get_metadata(self):
-
+        '''
+        Uses provided metadata to map column types to SQLAlchemy.
+        '''
         ui.item("Gathering metadata")
         print()
         metadata = []
@@ -230,9 +255,11 @@ class SocrataPortal(Portal):
 
 
     def __get_socrata_data(self, page_size=5000):
-        """Iterate over a datasets pages using the Socrata API"""
+        '''
+        Iterate over a datasets pages using the Socrata API
+        '''
         ui.item(
-        "Gathering data (this can take a bit for large datasets).")
+            "Gathering data (this can take a bit for large datasets).")
         page_num = 0
         more_pages = True
 
@@ -263,6 +290,9 @@ class SocrataPortal(Portal):
 
 
 class HudPortal(Portal):
+    '''
+    Stores HUD data
+    '''
     def __init__(self, site):
         Portal.__init__(self, site)
         self.name = "HUD"
@@ -270,10 +300,10 @@ class HudPortal(Portal):
             urllib.request.urlopen(
                 re.search('.*FeatureServer/', self.site).group()
                 ).read()
-            )        
+            )
         self.tbl_name = utils.get_table_name(BeautifulSoup(
             self.description, 'html.parser'
-            ).title.string.rstrip(' (FeatureServer)')).lower()        
+            ).title.string.rstrip(' (FeatureServer)')).lower()     
         self.data_info = json.loads(
             urllib.request.urlopen(
                 self.site + "&outFields=*&outSR=4326&f=json").read())
@@ -282,7 +312,7 @@ class HudPortal(Portal):
             re.search("where=\S*", self.site).group() else \
             re.search("where=\S*", self.site).group()
         self._dataset_code = re.search(
-            '(?<=Service ItemId:</b> )\w*', self.description).group()      
+            '(?<=Service ItemId:</b> )\w*', self.description).group()
         self.data = self._get_data()
         self.num_rows = len(self.data)
         self.col_mappings = {
@@ -297,16 +327,23 @@ class HudPortal(Portal):
         self.metadata = self.__get_metadata()
 
     def _get_data(self):
+        '''
+        Parses the GeoService URL to obtain the geojson download URL and uses
+        the geojson to obtain data.
+        '''
         def load_geojson(self):
             return json.loads(urllib.request.urlopen(
-            'https://opendata.arcgis.com/datasets/%s_0.geojson%s' %
-            (self._dataset_code, '?' + self._query)).read())
+                'https://opendata.arcgis.com/datasets/%s_0.geojson%s' %
+                (self._dataset_code, '?' + self._query)).read())
 
         geojson = load_geojson(self)
 
         return utils.geojson_data(geojson)
 
     def __get_metadata(self):
+        '''
+        Maps provided esriFieldTypes to sqlalchemy types.
+        '''
         ui.item("Gathering metadata")
         print()
         metadata = []

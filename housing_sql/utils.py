@@ -1,3 +1,6 @@
+'''
+Utility functions
+'''
 import re
 from sqlalchemy.orm import sessionmaker
 from progress.bar import FillingCirclesBar
@@ -10,15 +13,20 @@ import ui
 import warnings
 
 def get_table_name(raw_str):
-    """Transform a string into a suitable table name
+    '''
+    Transform a string into a suitable table name
 
     Swaps spaces for _s, lowercaes and strips special characters. Ex:
     'Calls to 9-1-1' becomes 'calls_to_911'
-    """
+    '''
     no_spaces = raw_str.replace(' ', '_')
     return re.sub(r'\W', '', no_spaces).lower()
 
 def insert_data(page, session, circle_bar, Binding, srid=4326, socrata=False):
+    '''
+    Inserts data into binding after parsing values in each row. Shows progress
+    on circle bar.
+    '''
     to_insert = []
 
     for row in page:
@@ -32,6 +40,9 @@ def insert_data(page, session, circle_bar, Binding, srid=4326, socrata=False):
     return
 
 def geojson_data(geojson):
+    '''
+    Parses ['features'] within geojson data and reformats all variable names.
+    '''
     ui.item(
         "Gathering data (this can take a bit for large datasets).")
     new_data = []
@@ -45,6 +56,9 @@ def geojson_data(geojson):
     return new_data
 
 def edit_columns(df):
+    '''
+    Reformats columns of a dataframe.
+    '''
     df.columns = \
         [col_name.lower().replace(" ", "_") for col_name in df.columns]
     return df
@@ -64,7 +78,7 @@ def parse_row(row, binding, srid):
     binding_columns = binding.__mapper__.columns
     for col_name, col_val in row.items():
         col_name = col_name.lower()
-        
+
         if col_name not in binding_columns:
             # We skipped this column when creating the binding; skip it now too
             continue
@@ -77,20 +91,11 @@ def parse_row(row, binding, srid):
 
     return parsed
 
-def convert_types(string):
-    '''
-    Takes a string and returns the type it represents.
-    i.e. '500 w addison st' returns str, '80.4' returns float, '5' returns int.
-    '''
-
-    for c in [int, float, str]:
-        try:
-            return c(val)
-        except ValueError:
-            pass
-    return val
-
 def create_metadata(data, mappings):
+    '''
+    Given a dictionary of data, maps python types of each value to
+    SQLAlchemy types.
+    '''
     ui.item("Gathering metadata")
     print()
     metadata = []
@@ -102,26 +107,30 @@ def create_metadata(data, mappings):
                     (col_name, Geometry(geometry_type='GEOMETRY', srid=4326)))
                 break
             elif record[col_name]:
-                try:                 
+                try:        
                     py_type = type(record[col_name])
                     print(col_name, ":", py_type)
                     metadata.append((col_name, mappings[py_type]))
                     break
                 except KeyError:
-                    warnings.warn('Unable to map "%s" to a SQL type.' % col_name)
+                    warnings.warn(
+                        'Unable to map "%s" to a SQL type.' % col_name)
                     break
     return metadata
 
 def spreadsheet_metadata(spreadsheet):
-        ui.item("Gathering metadata")
-        print()
-        metadata = []
-        for col_name, col_type in dict(spreadsheet.df.dtypes).items():
-            print(col_name, ":", col_type)
-            try:
-                metadata.append((col_name, spreadsheet.col_mappings[col_type]))
-            except KeyError:
-                warnings.warn('Unable to map "%s" to a SQL type.' % col_name)
-                continue
-        return metadata
-
+    '''
+    Given a spreadsheet object, maps column types as interpreted by pandas into
+    SQLAlchemy types.
+    '''
+    ui.item("Gathering metadata")
+    print()
+    metadata = []
+    for col_name, col_type in dict(spreadsheet.df.dtypes).items():
+        print(col_name, ":", col_type)
+        try:
+            metadata.append((col_name, spreadsheet.col_mappings[col_type]))
+        except KeyError:
+            warnings.warn('Unable to map "%s" to a SQL type.' % col_name)
+            continue
+    return metadata

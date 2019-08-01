@@ -2,12 +2,18 @@ from datetime import datetime
 import json
 from shapely.geometry import shape
 from geomet import wkt
+import pandas as pd
 
 
 def parse_datetime(str_val, srid=None):
     """Parse a Socrata floating timestamp field into a Python datetime
 
     See https://dev.socrata.com/docs/datatypes/floating_timestamp.html"""
+
+    if type(str_val) == pd.Timestamp:
+        return str_val.to_pydatetime()
+    if pd.isna(str_val):
+        return None
     if str_val == '' or not str_val:
         return None
     if str_val[-1] == "Z":
@@ -42,25 +48,11 @@ def parse_geom(geo_data, srid):
         wkt_text = shape(geo_data).wkt
 
         return ";".join(["SRID=%s" % srid, shape(geo_data).wkt])
-    '''
-    if geo_data['type'] == 'Point':
-        return 'SRID=%s;POINT(%s %s)' % (
-            srid,
-            geo_data['coordinates'][0],
-            geo_data['coordinates'][1],
-        )
-    
-
-    try:
-
-    
-
-    except:
-
-       raise NotImplementedError('%s are not yet supported' % geo_data['type'])
-    '''
 
 def parse_str(raw_str, srid=None):
+    if raw_str == "nan":
+        return None
+
     if isinstance(raw_str, dict):
         if 'url' in raw_str:
             return raw_str['url']
