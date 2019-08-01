@@ -9,7 +9,9 @@ This folder is based on a forked copy of Dallas Morning News' [socrata2sql](http
 
 ## Requirements
 
-- Python 3.x
+- Python 3.x<br>
+- Any database supported by SQLAlchemy<br>
+- Packages documented in [requirements.txt](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/requirements.txt)<br>
 
 ## Usage
 
