@@ -9,3 +9,4 @@ docopt == 0.6.2
 requests == 2.21.0
 progress==1.5
 geomet==0.2.0post2
+pyshp==2.1.0
