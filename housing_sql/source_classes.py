@@ -8,6 +8,7 @@ from geoalchemy2.types import Geometry
 from bs4 import BeautifulSoup
 from sodapy import Socrata
 import pandas as pd
+import geopandas as gpd
 import xlrd
 import numpy as np
 import string
@@ -15,19 +16,23 @@ import shapefile
 import zipfile
 import io
 import requests
+import ui
+import time
+import warnings
+from geopandas_postgis import PostGIS
 
 class Spreadsheet:
-    def __init__(self, location, has_url):
+    def __init__(self, location):
         self.location = location
-        self.has_url = has_url
         self.col_mappings = {np.dtype(object): Text,
             np.dtype('int64'): BigInteger,
             np.dtype('int32'): Integer,
             np.dtype('int16'): Integer,
             np.dtype('int8'): Integer,
             np.dtype(float): Numeric,
-            np.dtype('<M8[ns]'): DateTime}       
-        self.db_name = "postgres:///kcmo_db"
+            np.dtype('<M8[ns]'): DateTime,
+            np.dtype('bool'): Boolean}       
+        self.db_name = "postgresql:///mydb"
         self.session = None
         self.engine = None
         self.geo = False
@@ -41,10 +46,9 @@ class Excel(Spreadsheet):
     '''
     defaults to reading the first sheet
     '''
-    def __init__(self, location, has_url):
-        Spreadsheet.__init__(self, location, has_url)
-        self.xls = pd.ExcelFile(urllib.request.urlopen(location)) if has_url \
-            else pd.ExcelFile(location)
+    def __init__(self, location):
+        Spreadsheet.__init__(self, location)
+        self.xls = pd.ExcelFile(location)
         self.df = utils.edit_columns(self.xls.parse())
         self.name = "Excel File"
         self.tbl_name = self.xls.sheet_names[0].lower()
@@ -53,11 +57,9 @@ class Excel(Spreadsheet):
         self.data = self.df.to_dict(orient='records')
 
 class Csv(Spreadsheet):
-    def __init__(self, location, has_url):
-        Spreadsheet.__init__(self, location, has_url)
-        self.df = utils.edit_columns(
-            pd.read_csv(urllib.request.urlopen(location)) if has_url \
-            else pd.read_csv(location))
+    def __init__(self, location):
+        Spreadsheet.__init__(self, location)
+        self.df = pd.read_csv(location)
         self.name = "CSV file"
         self.tbl_name = self.__create_tbl_name()
         self.metadata = utils.spreadsheet_metadata(self)
@@ -72,76 +74,101 @@ class Csv(Spreadsheet):
             re.compile('[%s]' % re.escape(string.punctuation)).sub("_", sub_str)
 
 class SpatialFile:
-    def __init__(self, location, has_url):
+    def __init__(self, location):
         self.location = location
-        self.has_url = has_url
         self.engine = None
         self.session = None
         self.geo = None
         self.binding = None
-        self.db_name = "postgres:///kcmo_db"
+        self.db_name = "postgresql:///mydb"
         self.col_mappings = {
             str: Text,
             int : Integer,
-            float: Numeric
-            }
+            float: Numeric,
+            bool: Boolean}
 
 class Shape(SpatialFile):
-    def __init__(self, location, has_url):
-        SpatialFile.__init__(self, location, has_url)
+    def __init__(self, location):
+        SpatialFile.__init__(self, location)
         self.name = "Shapefile"
         self.tbl_name, self.geojson = self.__extract_file()
         self.data = utils.geojson_data(self.geojson)
         self.metadata = utils.create_metadata(self.data, self.col_mappings)
         self.num_rows = len(self.data)
+        self.gdf = None
 
     def __extract_file(self):
-        if self.has_url:
+        try:
             z = zipfile.ZipFile(io.BytesIO(requests.get(self.location).content))
-            print("Extracting shapefile to folder")
-            print()
+            ui.item("Extracting shapefile to folder")
             z.extractall()
             shp = [y for y in sorted(z.namelist()) for ending in \
             ['dbf', 'prj', 'shp', 'shx'] if y.endswith(ending)][2]
-        else:
+
+        except:
             shp = self.location
-        print("Reading shapefile")
-        print()
+
+        ui.item("Reading shapefile")
         #set default table name
         tbl_name = shp[shp.rfind("/") + 1:-4].lower()
         tbl_name = re.compile(
             '[%s]' % re.escape(string.punctuation)).sub("_", tbl_name)
         return tbl_name, shapefile.Reader(shp).__geo_interface__
 
+        '''
+        try:
+            return tbl_name, shapefile.Reader(shp).__geo_interface__
+
+        except:
+            geo = gpd.read_file(shp)
+            if geo.geometry.isnull().values.any():
+                warnings.warn(("File contains NULL geometries. " + \
+                    "These records will be dropped prior to upload.")) 
+                self.gdf = geo.loc[geo.geometry.notna()]
+        '''
+
+
+
     def insert(self, circle_bar):
-        print("Inserting data")
+        if self.gdf:
+            self.gdf.postgis.to_postgis(con=self.engine, table_name=self.tbl_name)
         utils.insert_data(
             self.data, self.session, circle_bar, self.binding)
         return
 
 class GeoJson(SpatialFile):
-    def __init__(self, location, has_url):
-        SpatialFile.__init__(self, location, has_url)
+    def __init__(self, location):
+        SpatialFile.__init__(self, location)
         self.name = "GeoJSON"
-        self.data = utils.geojson_data(
-            json.loads(urllib.request.urlopen(location).read()) if has_url \
-            else json.loads(location))
+        self.data = self.__get_data()
         self.metadata = utils.create_metadata(self.data, self.col_mappings)
         self.num_rows = len(self.data)
         self.tbl_name = self.__create_tbl_name()
 
     def insert(self, circle_bar):
-        print("Inserting data")
         utils.insert_data(
             self.data, self.session, circle_bar, self.binding)
         return
 
+    def __get_data(self):
+        try:
+            return utils.geojson_data(json.loads(self.location))
+        except:
+            return utils.geojson_data(
+                json.loads(urllib.request.urlopen(self.location).read()))
+
+
     def __create_tbl_name(self):
         pattern = ("(?:(?<=http://)|(?<=https://))[^\s]+(?:" + \
-        "(?=\.geojson)|(?=\?method=export&format=GeoJSON))") if \
-        self.has_url else ("[^\s]+(?:" + \
-        "(?=\.geojson)|(?=\?method=export&format=GeoJSON))")
+        "(?=\.geojson)|(?=\?method=export&format=GeoJSON))") 
+
         sub_str = re.search(pattern, self.location).group().lower()
+
+        if not sub_str:
+            pattern = ("[^\s]+(?:" + \
+            "(?=\.geojson)|(?=\?method=export&format=GeoJSON))")
+            sub_str = re.search(pattern, self.location).group().lower()
+
         return \
             re.compile('[%s]' % re.escape(string.punctuation)).sub("_", sub_str)
 
@@ -153,7 +180,7 @@ class Portal:
         self.session = None
         self.geo = None
         self.binding = None
-        self.db_name = "postgres:///kcmo_db"
+        self.db_name = "postgresql:///mydb"
 
 
 class SocrataPortal(Portal):
@@ -187,41 +214,51 @@ class SocrataPortal(Portal):
 
     def __get_metadata(self):
 
-        print("Gathering metadata")
-        print() 
+        ui.item("Gathering metadata")
+        print()
         metadata = []
         for col in self.client.get_metadata(self.dataset_id)['columns']:
             print(col['fieldName'], ":", col['dataTypeName'])
-            metadata.append(
-                (col['fieldName'], self.col_mappings[col['dataTypeName']]))
+            try:
+                metadata.append(
+                    (col['fieldName'], self.col_mappings[col['dataTypeName']]))
+            except KeyError:
+                warnings.warn('Unable to map "%s" to a SQL type.' % col_name)
+                continue
         return metadata
 
 
 
     def __get_socrata_data(self, page_size=5000):
         """Iterate over a datasets pages using the Socrata API"""
-        print("Gathering data")
-        print()
+        ui.item(
+        "Gathering data (this can take a bit for large datasets).")
         page_num = 0
         more_pages = True
 
         while more_pages:
-            api_data = self.client.get(
-                self.dataset_id,
-                limit=page_size,
-                offset=page_size * page_num,
-            )
+            try:
 
-            if len(api_data) < page_size:
-                more_pages = False
+                api_data = self.client.get(
+                    self.dataset_id,
+                    limit=page_size,
+                    offset=page_size * page_num,
+                )
 
-            page_num += 1
-            yield api_data
+                if len(api_data) < page_size:
+                    more_pages = False
+                page_num += 1
+                yield api_data
+
+            except:
+                ui.item("Sleeping for 10 seconds to avoid timeout")
+                time.sleep(10)
 
     def insert(self, circle_bar):
         for page in self.data:
             utils.insert_data(
-                page, self.session, circle_bar, self.binding, srid=self.srid)
+                page, self.session, circle_bar, self.binding, srid=self.srid, \
+                socrata=True)
         pass
 
 
@@ -260,13 +297,17 @@ class HudPortal(Portal):
         self.metadata = self.__get_metadata()
 
     def _get_data(self):
-        geojson = json.loads(urllib.request.urlopen(
+        def load_geojson(self):
+            return json.loads(urllib.request.urlopen(
             'https://opendata.arcgis.com/datasets/%s_0.geojson%s' %
             (self._dataset_code, '?' + self._query)).read())
+
+        geojson = load_geojson(self)
+
         return utils.geojson_data(geojson)
 
     def __get_metadata(self):
-        print("Gathering metadata")
+        ui.item("Gathering metadata")
         print()
         metadata = []
         for col in self.data_info['fields']:
@@ -278,7 +319,6 @@ class HudPortal(Portal):
         return metadata
 
     def insert(self, circle_bar):
-        print("Inserting data")
         utils.insert_data(
             self.data, self.session, circle_bar, self.binding, srid=self.srid)
         return

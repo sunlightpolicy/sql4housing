@@ -6,6 +6,8 @@ from sqlalchemy.types import DateTime, Text
 from geoalchemy2.types import Geometry
 import urllib
 import json
+import ui
+import warnings
 
 def get_table_name(raw_str):
     """Transform a string into a suitable table name
@@ -16,21 +18,24 @@ def get_table_name(raw_str):
     no_spaces = raw_str.replace(' ', '_')
     return re.sub(r'\W', '', no_spaces).lower()
 
-def insert_data(page, session, circle_bar, Binding, srid=4326):
+def insert_data(page, session, circle_bar, Binding, srid=4326, socrata=False):
     to_insert = []
 
     for row in page:
         to_insert.append(Binding(**parse_row(row, Binding, srid)))
+        if not socrata:
+            circle_bar.next()
     session.add_all(to_insert)
-    circle_bar.next(n=len(to_insert))
+    if socrata:
+        circle_bar.next(n=len(to_insert))
 
     return
 
 def geojson_data(geojson):
-    print("Gathering data")
-    print()
-    data = geojson['features']
+    ui.item(
+        "Gathering data (this can take a bit for large datasets).")
     new_data = []
+    data = geojson['features']
     for row in data:
         output = \
             {k.lower().replace(" ", "_"): v \
@@ -63,6 +68,7 @@ def parse_row(row, binding, srid):
         if col_name not in binding_columns:
             # We skipped this column when creating the binding; skip it now too
             continue
+
         mapper_col_type = type(binding_columns[col_name].type)
         if mapper_col_type in parsers:
             parsed[col_name] = parsers[mapper_col_type](col_val, srid)
@@ -85,27 +91,37 @@ def convert_types(string):
     return val
 
 def create_metadata(data, mappings):
+    ui.item("Gathering metadata")
+    print()
     metadata = []
     for col_name in data[0].keys():
+
         for record in data:
             if col_name == 'geometry':
                 metadata.append(
                     (col_name, Geometry(geometry_type='GEOMETRY', srid=4326)))
                 break
             elif record[col_name]:
-                #Need to convert python type to sqlalchemy type
-                py_type = type(record[col_name])
-                print(col_name, ":", py_type)
-                metadata.append((col_name, mappings[py_type]))
-                break
+                try:                 
+                    py_type = type(record[col_name])
+                    print(col_name, ":", py_type)
+                    metadata.append((col_name, mappings[py_type]))
+                    break
+                except KeyError:
+                    warnings.warn('Unable to map "%s" to a SQL type.' % col_name)
+                    break
     return metadata
 
 def spreadsheet_metadata(spreadsheet):
-        print("Gathering metadata")
+        ui.item("Gathering metadata")
         print()
         metadata = []
         for col_name, col_type in dict(spreadsheet.df.dtypes).items():
             print(col_name, ":", col_type)
-            metadata.append((col_name, spreadsheet.col_mappings[col_type]))
+            try:
+                metadata.append((col_name, spreadsheet.col_mappings[col_type]))
+            except KeyError:
+                warnings.warn('Unable to map "%s" to a SQL type.' % col_name)
+                continue
         return metadata
 

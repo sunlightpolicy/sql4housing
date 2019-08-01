@@ -1,6 +1,6 @@
 """Housing data to SQL database loader
 
-Load a dataset directly from an API (Socrata, HUD, Census) or file (csv or shp) 
+Load a dataset directly from an API (Socrata, HUD) or file (csv or shp) 
 into a SQL database. The loader supports any database supported by SQLalchemy.
 This file is adapted from a forked copy of DallasMorningNews/socrata2sql
 
@@ -63,7 +63,7 @@ from sqlalchemy.types import Integer
 from sqlalchemy_utils import database_exists, create_database
 import warnings
 import source_classes as sc
-from exceptions import CLIError
+from exceptions import CLIError, SourceError
 import ui
 import bulk_load
 from requests.exceptions import SSLError
@@ -208,12 +208,14 @@ def bulk_files(file_dict):
 
     for site, tbl_name in \
         file_dict.items():
+        
         source = sc.SocrataPortal(
                 bulk_load.SOCRATA_TABLES['site'], 
                 site,
                 bulk_load.SOCRATA_KEY) if \
             file_dict == bulk_load.SOCRATA_TABLES['dataset_ids'] \
             else mapper[str(file_dict)](site)
+
         if tbl_name:
             source.tbl_name = tbl_name
         if bulk_load.DB_NAME:
@@ -253,29 +255,17 @@ def main():
             source = sc.HudPortal(arguments['<site>'])
 
         if arguments['excel']:
-            if arguments['-u']:
-                source = sc.Excel(arguments['-u'][1:], True)
-            if arguments['-p']:
-                source = sc.Excel(arguments['-p'][1:], False)
+            source = sc.Excel(arguments['<location>'])
 
         if arguments['csv']:
-            if arguments['-u']:
-                source = sc.Csv(arguments['-u'][1:])
-            if arguments['-p']:
-                source = sc.Csv(arguments['-p'][1:])
+            source = sc.Csv(arguments['<location>'])
 
         if arguments['shp']:
-            if arguments['-u']:
-                source = sc.Shape(arguments['-u'][1:])
-            if arguments['-p']:
-                source = sc.Shape(arguments['-p'][1:])
+            source = sc.Shape(arguments['<location>'])
 
         if arguments['geojson']:
+            source = sc.GeoJson(arguments['<location>'])
 
-            if arguments['-u']:
-                source = sc.GeoJson(arguments['-u'][1:])
-            if arguments['-p']:
-                source = sc.GeoJson(arguments['-p'][1:])
 
 
         #get defaults
