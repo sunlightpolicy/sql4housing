@@ -177,16 +177,16 @@ class GeoJson(SpatialFile):
         hyperlink or file name.
         '''
         pattern = ("(?:(?<=http://)|(?<=https://))[^\s]+(?:" + \
-        "(?=\.geojson)|(?=\?method=export&format=GeoJSON))")
+        "(?=geojson)|(?=\?method=export&format=GeoJSON))")
 
-        sub_str = re.search(pattern, self.location).group().lower()
+        sub_str = re.search(pattern, self.location)
 
         if not sub_str:
             pattern = ("[^\s]+(?:" + \
             "(?=\.geojson)|(?=\?method=export&format=GeoJSON))")
-            sub_str = re.search(pattern, self.location).group().lower()
-
-        return \
+            sub_str = re.search(pattern, self.location)
+        sub_str = sub_str.group().lower()
+        return 
             re.compile('[%s]' % re.escape(string.punctuation)).sub("_", sub_str)
 
 
