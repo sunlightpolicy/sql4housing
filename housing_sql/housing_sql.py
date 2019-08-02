@@ -250,39 +250,40 @@ def main():
                 bulk_files(bulk_load.SOCRATA_TABLES['dataset_ids'])
             except SSLError:
                 warnings.warn("Skipping Socrata load due to SSL Error")
+        else:
 
         #Create source objects
-        if arguments['socrata']:
-            source = sc.SocrataPortal(
-                arguments['<site>'], arguments['<dataset_id>'], \
-                (arguments['-a'][1:] if arguments['-a'] else None)
-            )
+            if arguments['socrata']:
+                source = sc.SocrataPortal(
+                    arguments['<site>'], arguments['<dataset_id>'], \
+                    (arguments['-a'][1:] if arguments['-a'] else None)
+                )
 
-        if arguments['hud']:
-            source = sc.HudPortal(arguments['<site>'])
+            if arguments['hud']:
+                source = sc.HudPortal(arguments['<site>'])
 
-        if arguments['excel']:
-            source = sc.Excel(arguments['<location>'])
+            if arguments['excel']:
+                source = sc.Excel(arguments['<location>'])
 
-        if arguments['csv']:
-            source = sc.Csv(arguments['<location>'])
+            if arguments['csv']:
+                source = sc.Csv(arguments['<location>'])
 
-        if arguments['shp']:
-            source = sc.Shape(arguments['<location>'])
+            if arguments['shp']:
+                source = sc.Shape(arguments['<location>'])
 
-        if arguments['geojson']:
-            source = sc.GeoJson(arguments['<location>'])
+            if arguments['geojson']:
+                source = sc.GeoJson(arguments['<location>'])
 
+            #get defaults
+            if arguments['-d']:
+                source.db_name = arguments['-d'][1:]
 
+            if arguments['-t']:
+                source.tbl_name = arguments['-t'][1:]
 
-        #get defaults
-        if arguments['-d']:
-            source.db_name = arguments['-d'][1:]
+            assert(source), "Source has not been defined."
 
-        if arguments['-t']:
-            source.tbl_name = arguments['-t'][1:]
-
-        insert_source(source)
+            insert_source(source)
 
     except CLIError as e:
         ui.header(str(e), color='\033[91m')
