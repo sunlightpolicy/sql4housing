@@ -27,13 +27,28 @@ Options:
                      usually a few characters, separated by a hyphen, at the end
                      of the URL. Ex: 64pp-jeba
   <location>         Either the path or download URL where the file can be accessed.
-  -d=<database_url>  Database connection string for destination database as
+  --d=<database_url> Database connection string for destination database as
                      diacdlect+driver://username:password@host:port/database.
                      Default: "postgresql:///mydb"
-  -t=<table_name>    Destination table in the database. Defaults to a sanitized
+  --t=<table_name>   Destination table in the database. Defaults to a sanitized
                      version of the dataset or file's name.
-  -a=<app_token>     App token for the Socrata site. Only necessary for
+  --a=<app_token>    App token for the Socrata site. Only necessary for
                      high-volume requests. Default: None
+  --y=<year>         Optional year specification for the 5-year American Community
+                     survey. Defaults to 2017.
+  --m=<msa>          The metropolitan statistical area to include. 
+                     Ex: --m="new york-newark-jersey city"
+  --c=<csa>          The combined statistical area to include.
+                     Ex: --c="New York-Newark, NY-NJ-CT-PA"
+  --n=<county>       The county to include.
+                     Ex: --n="cook county, IL"
+  --s=<state>        The state to include.
+                     Ex: --s="illinois"
+  --p=<place>        The census place to include.
+                     Ex: --p="chicago, IL"
+  --l=<level>        The geographic level at which to extract data. i.e. tract,
+                     block, county, region, division. Reference cenpy documentation
+                     to learn more: https://github.com/cenpy-devs/cenpy
   -h --help          Show this screen.
   -v --version       Show version.
 
@@ -282,6 +297,7 @@ def load_yaml():
 def main():
 
     arguments = docopt(__doc__)
+    print(arguments)
 
 
     try:
