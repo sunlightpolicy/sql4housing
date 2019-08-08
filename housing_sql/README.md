@@ -5,7 +5,7 @@ This folder is based on a cloned copy of Dallas Morning News' [socrata2sql](http
 -Any locally saved .csv file or .csv download hyperlink<br>
 -Any locally saved .shp file or .zip download hyperlink containing a .shp file<br>
 -Any locally saved .geojson file or .geojson download hyperlink<br>
--Any dataset on a Socrata open data portal
+-Any dataset on a Socrata open data portal<br>
 -Census variables within the 5-year American Community Survey or Decennial Census
 
 ## Requirements
