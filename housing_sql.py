@@ -82,7 +82,6 @@ import yaml
 from yaml import CLoader as Loader
 import source_classes as sc
 import ui
-import bulk_load
 from requests.exceptions import SSLError
 
 
@@ -166,8 +165,7 @@ def get_connection(source):
         source.geo = False
     except ProgrammingError:
         source.geo = False
-    finally:
-        source.session.commit()
+    source.session.commit()
 
     if source.geo:
         ui.item(
