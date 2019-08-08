@@ -1,27 +1,87 @@
+This folder is based on a cloned copy of Dallas Morning News' [socrata2sql](https://github.com/DallasMorningNews/socrata2sql). Socrata2sql is a tool which allows you to import any dataset on the Socrata API and copy it into a SQL database of your choice using a command line interface. Here, I aim to adapt socrata2sql to be able to import datasets from the following sources:
 
-From 2001 to 2015, the share of households considered “rent burdened”- spending over 30 percent of income on rent-has increased by 19 percent. For these households, housing, an essential human need, has become a persistent source of financial and social stress. 
+-[HUD's Open Data Portal](https://hudgis-hud.opendata.arcgis.com/)<br>
+-Any locally saved Excel file or Excel download hyperlink<br>
+-Any locally saved .csv file or .csv download hyperlink<br>
+-Any locally saved .shp file or .zip download hyperlink containing a .shp file<br>
+-Any locally saved .geojson file or .geojson download hyperlink<br>
+-Any dataset on a Socrata open data portal<br>
+-Census variables within the 5-year American Community Survey or Decennial Census
 
-Many cities have struggled to keep housing supply in pace with increased demand, and tenants’ rights have become a focal point for local advocates and, increasingly, policy-makers. Despite public efforts to protect tenants, city governments don’t hold landlords accountable to maintaining their properties, and let developers lobby against tenant protection laws in order to buy and flip properties with short turnaround.
+## Requirements
 
-## Civic Hacking in Housing Advocacy
+- Python 3.x<br>
+- Any database supported by SQLAlchemy<br>
+- Packages documented in [requirements.txt](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/requirements.txt)<br>
 
-Housing advocates have an essential role to play in protecting residents from the consequences of real estate speculation. But they’re often at a significant disadvantage; the real estate lobby has access to a wealth of data and technological expertise. Civic hackers and open data could play an essential role in leveling the playing field.
+## Usage
 
-Civic hackers have facilitated wins for housing advocates by scraping data or submitting FOIA requests where data is not open and creating apps to help advocates gain insights that they can turn into action. 
+Changes in usage will be periodically updated and documented within the docstring of [housing_sql.py](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/housing_sql.py)
 
-Hackers at New York City’s Housing Data Coalition created a host of civic apps that identify problematic landlords by exposing owners behind shell companies, or flagging buildings where tenants are at risk of displacement. In a similar vein, Washington DC’s Housing Insights tool aggregates a wide variety of data to help advocates make decisions about affordable housing.
+## Example Use Case: Chicago
 
-## Barriers and opportunities
+Suppose we would like to build a database for a housing app in the city of Chicago. There are a number of datasets available via open data portals such as [Chicago's open data portal](https://data.cityofchicago.org/), [Cook County's open data portal](https://datacatalog.cookcountyil.gov/), and [HUD's open data portal](https://hudgis-hud.opendata.arcgis.com/).
 
-Today, the degree to which housing data exists, is openly available, and consistently reliable varies widely, even within cities themselves. Cities with robust communities of affordable housing advocacy groups may not be connected to people who can help open data and build usable tools. Even in cities with robust advocacy and civic tech communities, these groups may not know how to work together because of the significant institutional knowledge that’s required to understand how to best support housing advocacy efforts.
+The Chicago open data portal provides us with geospatial files of [building footprints](https://data.cityofchicago.org/Buildings/Building-Footprints-current-/hz9b-7nh8) and [neighborhood boundaries](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Neighborhoods/bbvz-uum9), along with Socrata APIs for building [permits](https://data.cityofchicago.org/Buildings/Building-Permits/ydr8-5enu/data) and [violations](https://data.cityofchicago.org/Buildings/Building-Violations/22u3-xenr/data), a [building code scofflaw list](https://data.cityofchicago.org/Buildings/Building-Code-Scofflaw-List-Map/hgat-td99), and a [problem landlord list](https://data.cityofchicago.org/Buildings/Problem-Landlord-List-Map/dip3-ud6z). We may also be interested in gathering geospatial files on [parcel maps](https://datacatalog.cookcountyil.gov/GIS-Maps/Historical-ccgisdata-Parcels-2016/a33b-b59u), [street midlines](https://datacatalog.cookcountyil.gov/GIS-Maps/Historical-ccgisdata-Street-Midlines-2015/73aw-3v3w), and [address points](https://datacatalog.cookcountyil.gov/GIS-Maps/Historical-ccgisdata-Address-Points-for-Area-13-20/6y64-fiuv) provided by Cook County. If our app aims to provide information on federally funded housing, we may wish to incorporate [Low-Income Housing Tax Credit (LIHTC) properties](http://hudgis-hud.opendata.arcgis.com/datasets/low-income-housing-tax-credit-properties), [HUD assisted](http://hudgis-hud.opendata.arcgis.com/datasets/multifamily-properties-assisted) and [HUD insured](http://hudgis-hud.opendata.arcgis.com/datasets/hud-insured-multifamily-properties/data) multifamily properties, and [public housing developments](http://hudgis-hud.opendata.arcgis.com/datasets/public-housing-developments). Suppose we are also interested in HUD's [physical inspection score data](https://www.hud.gov/program_offices/housing/mfh/rems/remsinspecscores/remsphysinspscores) as available via an Excel file download. We have then filtered the dataset for inspections in Chicago, IL and saved the file locally.
 
-In cities where civic hackers have tried to create useful open housing data repositories, similar data cleaning processes have been replicated, such as record linkage of building owners or identification of rent-controlled units. Civic hackers need to take on these data cleaning and “extract, transform, load” (ETL) processes in order to work with the data itself, even if it’s openly available. The Housing Data Coalition has assembled NYC-DB, a tool which builds a postgres database containing a variety of housing related data pertaining to New York City, and Washington DC’s Housing Insights similarly ingests housing data into a postgres database and API for front-end access. 
+#### NOTE:
+Key values HUD_TABLES must be GeoService URLs. This URL can be obtained in the 'APIs' dropdown located on the upper right hand corner of each dataset's page. To pre-filter the dataset, click on the 'Data' tab as shown below.
 
-Since these tools are open source, civic hackers in a multitude of cities can use existing work to develop their own, locally relevant tools to support local housing advocates. 
+![Alt text](images/data_tab.png "Public Housing Buildings")
 
-## Soliciting feedback on a new project for usable housing data
+After applying filters to the dataset, the 'APIs' dropdown will include a 'Filtered Dataset' option. In the example below, I filtered the "Public Housing Developments" dataset to only include developments within Chicago, IL. I then copied the GeoService URL under 'Filtered Dataset' into bulk_load.py.
 
-Throughout this summer, I’m going to build a tool for civic hackers to create databases of housing data for their own cities. My goal is to build on the work that civic hackers have initiated in New York, DC, and elsewhere, thereby reducing the startup effort required to develop apps to support housing advocacy efforts.
+![Alt text](images/hud_example.png "Public Housing Buildings")
 
-If you’re a civic hacker, advocate, policy expert, or anyone else working to make housing advocacy easier, I need your help! Are there significant barriers you’re facing where you could benefit from the expertise of other cities? Do you have open source tools which could be adapted for other cities to use? Has your city opened up a value source of data that you don’t know how to work with? If you’re interested in reviewing or advising on this project, please email kchan@sunlightfoundation.com or comment below. You can also follow along with this project on our GitHub.
+We may also be interested in key demographic characteristics of each census tract within the city of Chicago. Currently, we can load any table from the [5-year American Community Survey](https://www.census.gov/programs-surveys/acs/technical-documentation/table-and-geography-changes/2017/5-year.html) or [Decennial 2010 Census](https://www.census.gov/programs-surveys/decennial-census/decade/2010/about-2010.html). This option is built on top of the [cenpy package](https://github.com/cenpy-devs/cenpy).
+
+#### NOTE:
+[American FactFinder](https://factfinder.census.gov/faces/nav/jsf/pages/index.xhtml) is the Census Bureau's site for navigating datasets and available tables. [Census Reporter](https://censusreporter.org/) is an excellent alternative. Currently, [bulk_load.yaml](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/bulk_load.yaml) includes the variables B25105, B25064, and B25104 from the 5-year ACS 2017 and 2016. These variables represent Median Monthly Housing Costs, Median Gross Rent, and Monthly Housing Costs, respectively.
+
+### Bulk Loading
+
+We can load all of the above datasets at once by utilizing the command:
+    
+    python housing_sql.py bulk_load
+
+In order to do so, we must fill out the file [bulk_load.yaml](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/bulk_load.yaml) All datasets listed above are filled out within the current example of bulk_load.yaml. Each relation to be loaded into your database allows for an optional table name. Without a table name, the relation will default to a sanitized version of the path or hyperlink.
+
+
+### Example Query
+
+After executing the command,
+
+    python housing_sql.py bulk_load
+
+using the current example, we should be able to run
+
+    psql chi_property_data
+    \d
+
+and see that the database is populated with a list of relations.
+
+With a PostGIS extension, we will be able to answer questions such as "What is the number of public housing developments in Chicago by neighborhood?" with a geospatial query like the following:
+
+    SELECT pri_neigh, COUNT(*)
+    FROM public_housing_developments
+    JOIN neighborhood_boundaries
+    ON ST_INTERSECTS(public_housing_developments.geometry, neighborhood_boundaries.geometry)
+    GROUP BY pri_neigh
+    ORDER BY COUNT(*) DESC;
+
+In doing so, we learn that Bronzeville has the highest number at 17, followed by River North, United Center, and Kenwood. This query is possible because we have loaded a dataset of [public housing developments](https://hudgis-hud.opendata.arcgis.com/datasets/public-housing-developments) from HUD and [neighborhood boundaries](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Neighborhoods/bbvz-uum9) from Chicago's open data portal.
+
+![Alt text](images/query_output.png "Public Housing Buildings")
+
+#### NOTE:
+
+While SQLAlchemy can support a number of databases, housing data often entails geospatial data types. This tool currently only supports geospatial data types on Postgres with a [PostGIS extension](https://postgis.net/install/). Without PostGIS, datasets will still upload but geospatial columns will be skipped.
+
+### Individual Inserts
+
+We can also insert datasets into a database individually. Suppose we want to include [affordable rental housing developments supported by the City of Chicago](https://data.cityofchicago.org/Community-Economic-Development/Affordable-Rental-Housing-Developments/s6ha-ppgi) in 'postgres:///chi_property_data'. Since this dataset is supported by the Socrata Open Data API (SODA), we should be able to note the dataset ID (in this case, 's6ha-ppgi') and enter the command
+
+    python housing_sql.py socrata data.cityofchicago.org s6ha-ppgi -d="postgres:///chi_property_data"
+
+Detailed instructions on individual inserts are available within [housing_sql.py](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/housing_sql.py).
 
