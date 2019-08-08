@@ -8,8 +8,10 @@ import re
 from sqlalchemy.types import \
     Boolean, DateTime, Integer, BigInteger, Numeric, Text
 from geoalchemy2.types import Geometry
+from geopandas_postgis import PostGIS
 from bs4 import BeautifulSoup
 from sodapy import Socrata
+from cenpy import products
 import pandas as pd
 import numpy as np
 import string
@@ -186,8 +188,49 @@ class GeoJson(SpatialFile):
             "(?=\.geojson)|(?=\?method=export&format=GeoJSON))")
             sub_str = re.search(pattern, self.location)
         sub_str = sub_str.group().lower()
-        return 
-            re.compile('[%s]' % re.escape(string.punctuation)).sub("_", sub_str)
+        return re.compile(
+            '[%s]' % re.escape(string.punctuation)).sub("_", sub_str)
+
+class CenPy:
+    '''
+    Parent class of Shape and GeoJson
+    '''
+    def __init__(self, product, year, place_type, place, level, variables):
+        self.name = product
+        self.tbl_name = "_".join([product, str(year), place]).lower().strip()
+        self.engine = None
+        self.session = None
+        self.geo = None
+        self.binding = None
+        self.db_name = "postgresql:///mydb"
+        self.df = self.create_df(
+            product, year, place_type, place, level, variables)
+        self.num_rows = self.df.shape[0]
+
+    def create_df(self, product, year, place_type, place, level, variables):
+        if product == 'Decennial2010':
+            cen_prod = products.Decennial2010()
+        elif product == 'ACS' and year:
+            cen_prod = products.ACS(year)
+        elif product == 'ACS':
+            cen_prod = products.ACS()
+
+        place_mapper = {'msa': cen_prod.from_msa,
+                        'csa': cen_prod.from_csa,
+                        'county': cen_prod.from_county,
+                        'state': cen_prod.from_state,
+                        'placename': cen_prod.from_place}
+        ui.item(("Retrieving variables %s for all %ss in %s." +
+            "This can take some time for large datasets.") % \
+            (variables, level, place))
+        print()
+        return place_mapper[place_type](
+            place, level=level, variables=variables)
+
+    def insert(self, circle_bar):
+        ui.item("Inserting into PostGIS.")
+        self.df.postgis.to_postgis(con=self.engine, table_name=self.tbl_name,
+            geometry='geometry', if_exists='replace')
 
 
 class Portal:
@@ -207,7 +250,7 @@ class SocrataPortal(Portal):
     '''
     Stores SODA data.
     '''
-    def __init__(self, site, dataset_id, app_token):
+    def __init__(self, site, dataset_id, app_token, tbl_name=None):
         Portal.__init__(self, site)
         self.col_mappings = {
             'checkbox': Boolean,
@@ -226,7 +269,7 @@ class SocrataPortal(Portal):
         self.client = Socrata(self.site, self.app_token)
         self.tbl_name = utils.get_table_name(
             self.client.get_metadata(self.dataset_id)['name']
-            ).lower()
+            ).lower() if not tbl_name else tbl_name
         self.metadata = self.__get_metadata()
         self.srid = 4326
 

@@ -6,12 +6,13 @@ This file is adapted from a forked copy of DallasMorningNews/socrata2sql
 
 Usage:
   housing_sql.py bulk_load
-  housing_sql.py hud <site> [-d=<database_url>] [-t=<table_name>]
-  housing_sql.py socrata <site> <dataset_id> [-a=<app_token>] [-d=<database_url>] [-t=<table_name>]
-  housing_sql.py csv <location> [-d=<database_url>] [-t=<table_name>]
-  housing_sql.py excel <location> [-d=<database_url>] [-t=<table_name>]
-  housing_sql.py shp <location> [-d=<database_url>] [-t=<table_name>]
-  housing_sql.py geojson <location> [-d=<database_url>] [-t=<table_name>]
+  housing_sql.py hud <site> [--d=<database_url>] [--t=<table_name>]
+  housing_sql.py socrata <site> <dataset_id> [--a=<app_token>] [--d=<database_url>] [--t=<table_name>]
+  housing_sql.py csv <location> [--d=<database_url>] [--t=<table_name>]
+  housing_sql.py excel <location> [--d=<database_url>] [--t=<table_name>]
+  housing_sql.py shp <location> [--d=<database_url>] [--t=<table_name>]
+  housing_sql.py geojson <location> [--d=<database_url>] [--t=<table_name>]
+  housing_sql.py census (decennial2010 | (acs [--y=<year>])) <variables> (--m=<msa> | --c=<csa> | --n=<county> | --s=<state> | --p=<place>) [--l=<level>] [--d=<database_url>] [--t=<table_name>]
   housing_sql.py (-h | --help)
   housing_sql.py (-v | --version)
 
@@ -62,6 +63,8 @@ from geoalchemy2.types import Geometry
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import Integer
 from sqlalchemy_utils import database_exists, create_database
+import yaml
+from yaml import CLoader as Loader
 import source_classes as sc
 import ui
 import bulk_load
@@ -134,7 +137,6 @@ def get_connection(source):
         create_database(source.engine.url)
         ui.item("Creating database %s" % source.db_name)
 
-
     Session = sessionmaker()
     Session.configure(bind=source.engine)
 
@@ -164,24 +166,29 @@ def insert_source(source):
     '''
 
     get_connection(source)
-    get_binding(source)
+
+    if not isinstance(source, sc.CenPy):
+        get_binding(source)
 
     if source.engine.dialect.has_table(source.engine, source.tbl_name):
         print()
         warnings.warn(("Destination table already exists. Current table " +
                        "will be dropped and replaced."))
         print()
-        source.binding.__table__.drop(source.engine)
+        if not isinstance(source, sc.CenPy):
+            source.binding.__table__.drop(source.engine)
 
 
     try:
-        source.binding.__table__.create(source.engine)
+        if not isinstance(source, sc.CenPy):
+            source.binding.__table__.create(source.engine)
     except ProgrammingError as e:
 
         raise CLIError('Error creating destination table: %s' % str(e))
 
 
-    circle_bar = FillingCirclesBar('  ▶ Loading from source', max=source.num_rows)
+    circle_bar = FillingCirclesBar(
+        '  ▶ Loading from source', max=source.num_rows)
 
     source.insert(circle_bar)
 
@@ -201,34 +208,75 @@ def insert_source(source):
 
     return
 
-def bulk_files(file_dict):
-    '''
-    Maps dictionaries from bulk_load.py to corresponding source
-    objects from source_classes.py and runs insert_source.
-    '''
+def load_yaml():
+    output = yaml.load(open('bulk_load.yaml'), Loader=Loader)
+    db_name = output['DATABASE']
 
-    mapper = {str(bulk_load.SHAPEFILES): sc.Shape,
-              str(bulk_load.GEOJSONS): sc.GeoJson,
-              str(bulk_load.CSVS): sc.Csv,
-              str(bulk_load.HUD_TABLES): sc.HudPortal,
-              str(bulk_load.EXCELS): sc.Excel}
+    source_mapper = {'GEOJSONS': sc.GeoJson,
+              'SHAPEFILES': sc.Shape,
+              'CSVS': sc.Csv,
+              'EXCELS': sc.Excel,
+              'HUD_TABLES':sc.HudPortal}
 
-    for site, tbl_name in \
-        file_dict.items():
+    def parse_items(output_dict):
+        try:
 
-        source = sc.SocrataPortal(
-            bulk_load.SOCRATA_TABLES['site'],
-            site,
-            bulk_load.SOCRATA_KEY) if \
-            file_dict == bulk_load.SOCRATA_TABLES['dataset_ids'] \
-            else mapper[str(file_dict)](site)
+            for dataset in output[output_dict]:
+                location, tbl_name = list(dataset.items())[0]
+                source = source_mapper[output_dict](location)
+                if tbl_name:
+                    source.tbl_name = tbl_name
+                insert_source(source)
+        except Exception as e:
 
-        if tbl_name:
-            source.tbl_name = tbl_name
-        if bulk_load.DB_NAME:
-            source.db_name = bulk_load.DB_NAME
-        insert_source(source)
+            ui.item(("Skipping %s load due to error: \"%s\". Double check " +
+                "formatting of bulk_load.yaml if this was " +
+                "unintentional.") % (output_dict, e))
+            print()
+            pass
 
+    for output_dict in source_mapper.keys():
+        parse_items(output_dict)
+
+    try:
+        socrata_sites = output.get('SOCRATA').get('sites')
+        app_token = output.get('SOCRATA').get('app_token')
+        if socrata_sites:
+            for site in socrata_sites:
+                url = site['url']
+                for dataset in site['datasets']:
+                    dataset_id, tbl_name = list(dataset.items())[0]
+                    source = sc.SocrataPortal(
+                        url, dataset_id, app_token, tbl_name)
+                    insert_source(source)
+    except Exception as e:
+        ui.item(("Skipping Socrata load due to error: \"%s\". Double check " +
+            "formatting of bulk_load.yaml if this is was " +
+            "unintentional.") \
+            % e)
+        print()
+        pass
+
+
+    try:
+        place_type = output['CENSUS'].get('place_type')
+        place_name = output['CENSUS'].get('place_name')
+        level = output['CENSUS'].get('level')
+        for dataset in output['CENSUS']['datasets']:
+            if dataset.get('ACS'):
+                product = 'ACS'
+            if dataset.get('DECENNIAL2010'):
+                product = 'Decennial2010'
+            year = dataset[product].get('year')  
+            tbl_name = dataset[product]['tbl_name']
+            variables = dataset[product]['variables']
+            source = sc.CenPy(
+                product, year, place_type, place_name, level, variables)
+    except Exception as e:        
+        ui.item(("Skipping Census load due to error: \"%s\". Double check " +
+            "formatting of bulk_load.yaml if this was unintentional.") % e)
+        print()
+        pass
 
 
 def main():
@@ -240,24 +288,16 @@ def main():
 
         if arguments['bulk_load']:
 
-            bulk_files(bulk_load.GEOJSONS)
-            bulk_files(bulk_load.SHAPEFILES)
-            bulk_files(bulk_load.CSVS)
-            bulk_files(bulk_load.EXCELS)
-            bulk_files(bulk_load.HUD_TABLES)
+            load_yaml()
 
-            try:
-                bulk_files(bulk_load.SOCRATA_TABLES['dataset_ids'])
-            except SSLError:
-                warnings.warn("Skipping Socrata load due to SSL Error")
         else:
 
         #Create source objects
             if arguments['socrata']:
                 source = sc.SocrataPortal(
-                    arguments['<site>'], arguments['<dataset_id>'], \
-                    (arguments['-a'][1:] if arguments['-a'] else None)
-                )
+                    arguments['<site>'], \
+                    arguments['<dataset_id>'], \
+                    arguments['--a'])
 
             if arguments['hud']:
                 source = sc.HudPortal(arguments['<site>'])
@@ -274,12 +314,40 @@ def main():
             if arguments['geojson']:
                 source = sc.GeoJson(arguments['<location>'])
 
-            #get defaults
-            if arguments['-d']:
-                source.db_name = arguments['-d'][1:]
+            if arguments['census']:
+                place_mappings = {'--m': 'msa',
+                                  '--c': 'csa',
+                                  '--n': 'county',
+                                  '--s': 'state',
+                                  '--p': 'placename'}
+                for abb, place in place_mappings.items():
+                    if arguments.get(abb):
+                        place_type = place_mappings[abb]
+                        place_arg = arguments[abb]
+                        break
+                if arguments['--l']:
+                    level = arguments['--l']
+                else:
+                    level = 'tract'
+                if arguments['decennial2010']:
+                    source = sc.CenPy(
+                        'Decennial2010', None, place_type, place_arg,
+                        level, arguments['<variables>'])
+                elif arguments['acs']:
+                    if arguments['--y']:
+                        year = int(arguments['--y'])
+                    else:
+                        year = None
+                    source = sc.CenPy(
+                        'ACS', year, place_type,
+                        place_arg, level,
+                        [arguments['<variables>']])
 
-            if arguments['-t']:
-                source.tbl_name = arguments['-t'][1:]
+            if arguments['--d']:
+                source.db_name = arguments['--d']
+
+            if arguments['--t']:
+                source.tbl_name = arguments['--t']
 
             assert(source), "Source has not been defined."
 
