@@ -16,7 +16,7 @@ This folder is based on a cloned copy of Dallas Morning News' [socrata2sql](http
 
 ## Usage
 
-Changes in usage will be periodically updated and documented within the docstring of [housing_sql.py](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/housing_sql.py)
+Changes in usage will be periodically updated and documented within the docstring of [housing_sql.py](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql.py)
 
 ## Example Use Case: Chicago
 
@@ -81,7 +81,7 @@ While SQLAlchemy can support a number of databases, housing data often entails g
 
 We can also insert datasets into a database individually. Suppose we want to include [affordable rental housing developments supported by the City of Chicago](https://data.cityofchicago.org/Community-Economic-Development/Affordable-Rental-Housing-Developments/s6ha-ppgi) in 'postgres:///chi_property_data'. Since this dataset is supported by the Socrata Open Data API (SODA), we should be able to note the dataset ID (in this case, 's6ha-ppgi') and enter the command
 
-    python housing_sql.py socrata data.cityofchicago.org s6ha-ppgi -d="postgres:///chi_property_data"
+    python housing_sql.py socrata data.cityofchicago.org s6ha-ppgi --d="postgres:///chi_property_data"
 
 Detailed instructions on individual inserts are available within [housing_sql.py](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/housing_sql.py).
 
