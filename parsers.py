@@ -39,8 +39,8 @@ def parse_geom(geo_data, srid):
     if 'latitude' in geo_data and 'longitude' in geo_data:
         return 'SRID=%s;POINT(%s %s)' % (
             srid,
-            geo_data['latitude'],
             geo_data['longitude'],
+            geo_data['latitude'],
         )
     elif 'human_address' in geo_data and 'latitude' not in geo_data:
         return None
