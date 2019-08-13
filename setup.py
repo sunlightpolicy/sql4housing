@@ -2,13 +2,13 @@ from setuptools import setup
 setup(
   name = 'sql4housing',         # How you named your package folder (MyLib)
   packages = ['sql4housing'],   # Chose the same as "name"
-  version = 'v0.0.2-alpha',      # Start with a small number and increase it with every change you make
+  version = 'v0.0.3-alpha',      # Start with a small number and increase it with every change you make
   license='MIT',        # Chose a license from here: https://help.github.com/articles/licensing-a-repository
   description = 'Create housing databases with a command line interface.',   # Give a short description about your library
   author = 'Krista Chan',                   # Type in your name
   author_email = 'kristacchan@gmail.com',      # Type in your E-Mail
   url = 'https://github.com/sunlightpolicy/sql4housing',   # Provide either the link to your github or to your website
-  download_url = 'https://github.com/sunlightpolicy/sql4housing/archive/v0.0.2-alpha.tar.gz',    # I explain this later on
+  download_url = 'https://github.com/sunlightpolicy/sql4housing/archive/v0.0.3-alpha.tar.gz',    # I explain this later on
   keywords = ['CIVIC-TECH', 'HOUSING-DATA', 'HOUSING_ADVOCATES', 'CITIES', 'DATABASES', 'SODA', 'CENSUS', 'HUD', 'HOUSING', 'POSTGIS'],   # Keywords that define your package best
   install_requires=[            # I get to this in a second
           'numpy',
