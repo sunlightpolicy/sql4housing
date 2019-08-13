@@ -12,11 +12,11 @@ This folder is based on a cloned copy of Dallas Morning News' [socrata2sql](http
 
 - Python 3.x<br>
 - Any database supported by SQLAlchemy<br>
-- Packages documented in [requirements.txt](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/requirements.txt)<br>
+- Packages documented in [requirements.txt](https://github.com/sunlightpolicy/Housing_Data/blob/master/sql4housing/requirements.txt)<br>
 
 ## Usage
 
-Changes in usage will be periodically updated and documented within the docstring of [housing_sql.py](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql.py)
+Changes in usage will be periodically updated and documented within the docstring of [sql4housing.py](https://github.com/sunlightpolicy/Housing_Data/blob/master/sql4housing.py)
 
 ## Example Use Case: Chicago
 
@@ -36,22 +36,22 @@ After applying filters to the dataset, the 'APIs' dropdown will include a 'Filte
 We may also be interested in key demographic characteristics of each census tract within the city of Chicago. Currently, we can load any table from the [5-year American Community Survey](https://www.census.gov/programs-surveys/acs/technical-documentation/table-and-geography-changes/2017/5-year.html) or [Decennial 2010 Census](https://www.census.gov/programs-surveys/decennial-census/decade/2010/about-2010.html). This option is built on top of the [cenpy package](https://github.com/cenpy-devs/cenpy).
 
 #### NOTE:
-[American FactFinder](https://factfinder.census.gov/faces/nav/jsf/pages/index.xhtml) is the Census Bureau's site for navigating datasets and available tables. [Census Reporter](https://censusreporter.org/) is an excellent alternative. Currently, [bulk_load.yaml](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/bulk_load.yaml) includes the variables B25105, B25064, and B25104 from the 5-year ACS 2017 and 2016. These variables represent Median Monthly Housing Costs, Median Gross Rent, and Monthly Housing Costs, respectively.
+[American FactFinder](https://factfinder.census.gov/faces/nav/jsf/pages/index.xhtml) is the Census Bureau's site for navigating datasets and available tables. [Census Reporter](https://censusreporter.org/) is an excellent alternative. Currently, [bulk_load.yaml](https://github.com/sunlightpolicy/Housing_Data/blob/master/sql4housing/bulk_load.yaml) includes the variables B25105, B25064, and B25104 from the 5-year ACS 2017 and 2016. These variables represent Median Monthly Housing Costs, Median Gross Rent, and Monthly Housing Costs, respectively.
 
 ### Bulk Loading
 
 We can load all of the above datasets at once by utilizing the command:
     
-    python housing_sql.py bulk_load
+    python sql4housing.py bulk_load
 
-In order to do so, we must fill out the file [bulk_load.yaml](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/bulk_load.yaml) All datasets listed above are filled out within the current example of bulk_load.yaml. Each relation to be loaded into your database allows for an optional table name. Without a table name, the relation will default to a sanitized version of the path or hyperlink.
+In order to do so, we must fill out the file [bulk_load.yaml](https://github.com/sunlightpolicy/Housing_Data/blob/master/sql4housing/bulk_load.yaml) All datasets listed above are filled out within the current example of bulk_load.yaml. Each relation to be loaded into your database allows for an optional table name. Without a table name, the relation will default to a sanitized version of the path or hyperlink.
 
 
 ### Example Query
 
 After executing the command,
 
-    python housing_sql.py bulk_load
+    python sql4housing.py bulk_load
 
 using the current example, we should be able to run
 
@@ -81,7 +81,7 @@ While SQLAlchemy can support a number of databases, housing data often entails g
 
 We can also insert datasets into a database individually. Suppose we want to include [affordable rental housing developments supported by the City of Chicago](https://data.cityofchicago.org/Community-Economic-Development/Affordable-Rental-Housing-Developments/s6ha-ppgi) in 'postgres:///chi_property_data'. Since this dataset is supported by the Socrata Open Data API (SODA), we should be able to note the dataset ID (in this case, 's6ha-ppgi') and enter the command
 
-    python housing_sql.py socrata data.cityofchicago.org s6ha-ppgi --d="postgres:///chi_property_data"
+    python sql4housing.py socrata data.cityofchicago.org s6ha-ppgi --d="postgres:///chi_property_data"
 
-Detailed instructions on individual inserts are available within [housing_sql.py](https://github.com/sunlightpolicy/Housing_Data/blob/master/housing_sql/housing_sql.py).
+Detailed instructions on individual inserts are available within [sql4housing.py](https://github.com/sunlightpolicy/Housing_Data/blob/master/sql4housing/sql4housing.py).
 
