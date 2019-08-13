@@ -236,6 +236,7 @@ def load_yaml():
 
             for dataset in output[output_dict]:
                 location, tbl_name = list(dataset.items())[0]
+                print(location, tbl_name)
                 source = source_mapper[output_dict](location)
                 if tbl_name:
                     source.tbl_name = tbl_name

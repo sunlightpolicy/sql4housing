@@ -169,6 +169,7 @@ class GeoJson(SpatialFile):
         try:
             return utils.geojson_data(json.loads(self.location))
         except:
+            
             return utils.geojson_data(
                 json.loads(urllib.request.urlopen(self.location).read()))
 
