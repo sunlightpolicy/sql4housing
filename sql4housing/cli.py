@@ -68,7 +68,6 @@ Examples:
   $ sql4housing.py excel "http://www.huduser.org/portal/datasets/pis/public_housing_physical_inspection_scores.xlsx" -d=postgresql:///housingdb
 """
 import warnings
-from exceptions import CLIError
 from docopt import docopt
 from progress.bar import FillingCirclesBar
 from sqlalchemy import Column, create_engine
@@ -80,9 +79,11 @@ from sqlalchemy.types import Integer
 from sqlalchemy_utils import database_exists, create_database
 import yaml
 from yaml import CLoader as Loader
-import source_classes as sc
-import ui
 from requests.exceptions import SSLError
+
+from sql4housing import source_classes as sc
+from sql4housing import ui
+from sql4housing.exceptions import CLIError
 
 
 def get_binding(source):
