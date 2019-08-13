@@ -18,10 +18,10 @@ import shapefile
 import zipfile
 import io
 import requests
-import ui
 import time
 import warnings
 from sql4housing import utils
+from sql4housing import ui
 
 class Spreadsheet:
     '''
