@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup
 setup(
   name = 'sql4housing',         # How you named your package folder (MyLib)
   packages = ['sql4housing'],   # Chose the same as "name"
@@ -28,6 +28,10 @@ setup(
           'cenpy',
           'pyyaml'
       ],
+  entry_points = {
+    'console_scripts': [
+      'sql4housing=sql4housing.cli:main']
+  },
   classifiers=[
     'Development Status :: 3 - Alpha',      # Chose either "3 - Alpha", "4 - Beta" or "5 - Production/Stable" as the current state of your package
     'Intended Audience :: Developers',      # Define that your audience are developers
