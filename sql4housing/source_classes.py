@@ -3,7 +3,6 @@ Classes to represent each data source.
 '''
 import urllib.request
 import json
-import utils
 import re
 from sqlalchemy.types import \
     Boolean, DateTime, Integer, BigInteger, Numeric, Text
@@ -22,6 +21,7 @@ import requests
 import ui
 import time
 import warnings
+from sql4housing import utils
 
 class Spreadsheet:
     '''
