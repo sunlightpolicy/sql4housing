@@ -1,0 +1,97 @@
+# DATABASE is a database connection string for destination database as
+# Example:
+# DATABASE: diacdlect+driver://username:password@host:port/database
+DATABASE: postgres:///chi_property_data
+
+# GEOJSONS should include the the path where a geojson file is stored or the 
+# download hyperlink followed by an optional table name.
+# Example:
+# - chicago_data/Boundaries - Neighborhoods.geojson: neighborhood_boundaries
+GEOJSONS: 
+- https://datacatalog.cookcountyil.gov/api/geospatial/a33b-b59u?method=export&format=GeoJSON: parcels
+- https://datacatalog.cookcountyil.gov/api/geospatial/73aw-3v3w?method=export&format=GeoJSON: street_midlines
+- https://datacatalog.cookcountyil.gov/api/geospatial/6y64-fiuv?method=export&format=GeoJSON: address_points_area_13
+- https://data.cityofchicago.org/api/geospatial/hz9b-7nh8?method=export&format=GeoJSON: building_footprints
+
+# SHAPEFILES should include the the path where a shape file is stored or the 
+# download hyperlink followed by an optional table name.
+# Example:
+# - chicago_data/Boundaries - Neighborhoods.geojson: neighborhood_boundaries
+SHAPEFILES:
+- https://data.cityofchicago.org/api/geospatial/bbvz-uum9?method=export&format=Shapefile: neighborhood_boundaries
+
+# CSVS should include the the path where a csv file is stored or the 
+# download hyperlink followed by an optional table name.
+# Example:
+# - https://data.cityofchicago.org/api/views/qcfn-tiw7/rows.csv?accessType=DOWNLOAD: performance_metrics
+CSVS:
+
+# CSVS should include the the path where an Excel file is stored or the 
+# download hyperlink followed by an optional table name.
+# Example: 
+# - chicago_data/Chicago MF Inspection.xlsx: reac_scores
+EXCELS:
+- chicago_data/Chicago MF Inspection.xlsx: reac_scores
+
+# HUD_TABLES should include the the geoservice path for any dataset on
+# https://hudgis-hud.opendata.arcgis.com/ followed by an optional table name. 
+# See README.md for details on retrieving the hyperlink
+# Example: 
+# - https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/Location_Affordability_Index_2_0/FeatureServer/0/query?outFields=*&where=1%3D1: location_affordability
+HUD_TABLES:
+- https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/LIHTC/FeatureServer/0/query?outFields=*&where=PROJ_CTY%20like%20'%25chicago%25'%20AND%20PROJ_ST%20like%20'%25IL%25': lihtc_properties
+- https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/Multifamily_Properties_Assisted/FeatureServer/0/query?outFields=*&where=HUB_NAME_TEXT%20%3D%20'Chicago': multifamily_properties_assisted
+- https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/HUD_Insured_Multifamily_Properties/FeatureServer/0/query?outFields=*&where=HUB_NAME_TEXT%20%3D%20'Chicago'": hud_insured_multifamily_properties
+- https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/Public_Housing_Developments/FeatureServer/0/query?outFields=*&where=STD_CITY%20like%20'%25chicago%25'%20AND%20STD_ST%20like%20'%25IL%25': public_housing_developments
+
+# SOCRATA should include an optional app_token, sites followed by the portal's
+# url and datasets followed by dataset IDs and optional table names. The dataset
+# ID is usually a few characters, separated by a hyphen, at the end
+# of the URL. Ex: 64pp-jeba
+# Example:
+# SOCRATA:
+#  app_token:
+#  sites:
+#    - url: data.kcmo.org
+#      datasets:
+#        - ax3m-jhxx: dangerous_buildings
+SOCRATA:
+  app_token:
+  sites:
+    - url: data.cityofchicago.org
+      datasets:
+        - hgat-td99: scofflaw_list        
+        - dip3-ud6z: problem_landlords
+        - ydr8-5enu: building_permits
+        - 22u3-xenr: building_violations
+
+# CENSUS should include a place_type (options are placename, msa, csa, county, 
+# state), place_name which represents the name of the corresponding place_type, 
+# level which is the geographic level represented by each row (i.e. tract, 
+# county, block), and datasets which represents each table to be loaded.
+# Within datasets, list either ACS or Decennial2010. Within each dataset, 
+# include an optional table name and list of variables. ACS datasets should also
+# include a year.
+CENSUS:
+  place_type: placename
+  place_name: Chicago, IL
+  level: tract
+  datasets: 
+    - ACS:
+        year: 2017
+        tbl_name: acs_2017
+        variables: 
+          - B25105
+          - B25064
+          - B25104
+    - ACS:
+        year: 2016
+        tbl_name: acs_2017
+        variables: 
+          - B25105
+          - B25064
+          - B25104
+    - DECENNIAL2010:
+        tbl_name:
+        variables:
+
