@@ -4,13 +4,14 @@ Utility functions
 import re
 from sqlalchemy.orm import sessionmaker
 from progress.bar import FillingCirclesBar
-from parsers import parse_datetime, parse_geom, parse_str
 from sqlalchemy.types import DateTime, Text
 from geoalchemy2.types import Geometry
 import urllib
 import json
-import ui
 import warnings
+
+from sql4housing.parsers import parse_datetime, parse_geom, parse_str
+from sql4housing import ui
 
 def get_table_name(raw_str):
     '''
