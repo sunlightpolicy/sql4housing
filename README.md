@@ -12,9 +12,7 @@ This tool is based on a cloned copy of Dallas Morning News' [socrata2sql](https:
 
 - Python 3.x<br>
 - Any database supported by SQLAlchemy<br>
-- Installation of the sql4housing tool via:
-
-    pip install sql4housing
+- Download package via: `pip install sql4housing`
 
 ## Usage
 
