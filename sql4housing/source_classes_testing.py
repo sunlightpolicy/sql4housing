@@ -20,7 +20,7 @@ import io
 import requests
 import time
 import warnings
-import utils_testing
+import utils_testing_testing
 import ui
 
 class Spreadsheet:
@@ -46,7 +46,7 @@ class Spreadsheet:
         self.data = None
 
     def insert(self, circle_bar):
-        utils.insert_data(self.data, self.session, circle_bar, self.binding)
+        utils_testing.insert_data(self.data, self.session, circle_bar, self.binding)
 
 class Excel(Spreadsheet):
     '''
@@ -57,10 +57,10 @@ class Excel(Spreadsheet):
     def __init__(self, location):
         Spreadsheet.__init__(self, location)
         self.xls = pd.ExcelFile(location)
-        self.df = utils.edit_columns(self.xls.parse())
+        self.df = utils_testing.edit_columns(self.xls.parse())
         self.name = "Excel File"
         self.tbl_name = self.xls.sheet_names[0].lower()
-        self.metadata = utils.spreadsheet_metadata(self)
+        self.metadata = utils_testing.spreadsheet_metadata(self)
         self.num_rows = self.df.shape[0]
         self.data = self.df.to_dict(orient='records')
 
@@ -74,7 +74,7 @@ class Csv(Spreadsheet):
         self.df = pd.read_csv(location)
         self.name = "CSV file"
         self.tbl_name = self.__create_tbl_name()
-        self.metadata = utils.spreadsheet_metadata(self)
+        self.metadata = utils_testing.spreadsheet_metadata(self)
         self.num_rows = self.df.shape[0]
         self.data = self.df.to_dict(orient='records')
 
@@ -115,8 +115,8 @@ class Shape(SpatialFile):
         SpatialFile.__init__(self, location)
         self.name = "Shapefile"
         self.tbl_name, self.geojson = self.__extract_file()
-        self.data = utils.geojson_data(self.geojson)
-        self.metadata = utils.create_metadata(self.data, self.col_mappings)
+        self.data = utils_testing.geojson_data(self.geojson)
+        self.metadata = utils_testing.create_metadata(self.data, self.col_mappings)
         self.num_rows = len(self.data)
 
     def __extract_file(self):
@@ -144,7 +144,7 @@ class Shape(SpatialFile):
 
 
     def insert(self, circle_bar):
-        utils.insert_data(
+        utils_testing.insert_data(
             self.data, self.session, circle_bar, self.binding)
         return
 
@@ -156,21 +156,21 @@ class GeoJson(SpatialFile):
         SpatialFile.__init__(self, location)
         self.name = "GeoJSON"
         self.data = self.__get_data()
-        self.metadata = utils.create_metadata(self.data, self.col_mappings)
+        self.metadata = utils_testing.create_metadata(self.data, self.col_mappings)
         self.num_rows = len(self.data)
         self.tbl_name = self.__create_tbl_name()
 
     def insert(self, circle_bar):
-        utils.insert_data(
+        utils_testing.insert_data(
             self.data, self.session, circle_bar, self.binding)
         return
 
     def __get_data(self):
         try:
-            return utils.geojson_data(json.loads(self.location))
+            return utils_testing.geojson_data(json.loads(self.location))
         except:
             
-            return utils.geojson_data(
+            return utils_testing.geojson_data(
                 json.loads(urllib.request.urlopen(self.location).read()))
 
 
@@ -268,7 +268,7 @@ class SocrataPortal(Portal):
         self.dataset_id = dataset_id
         self.app_token = app_token
         self.client = Socrata(self.site, self.app_token)
-        self.tbl_name = utils.get_table_name(
+        self.tbl_name = utils_testing.get_table_name(
             self.client.get_metadata(self.dataset_id)['name']
             ).lower() if not tbl_name else tbl_name
         self.metadata = self.__get_metadata()
@@ -327,7 +327,7 @@ class SocrataPortal(Portal):
 
     def insert(self, circle_bar):
         for page in self.data:
-            utils.insert_data(
+            utils_testing.insert_data(
                 page, self.session, circle_bar, self.binding, srid=self.srid, \
                 socrata=True)
         pass
@@ -345,7 +345,7 @@ class HudPortal(Portal):
                 re.search('.*FeatureServer/', self.site).group()
                 ).read()
             )
-        self.tbl_name = utils.get_table_name(BeautifulSoup(
+        self.tbl_name = utils_testing.get_table_name(BeautifulSoup(
             self.description, 'html.parser'
             ).title.string.rstrip(' (FeatureServer)')).lower()     
         self.data_info = json.loads(
@@ -382,7 +382,7 @@ class HudPortal(Portal):
 
         geojson = load_geojson(self)
 
-        return utils.geojson_data(geojson)
+        return utils_testing.geojson_data(geojson)
 
     def __get_metadata(self):
         '''
@@ -400,6 +400,6 @@ class HudPortal(Portal):
         return metadata
 
     def insert(self, circle_bar):
-        utils.insert_data(
+        utils_testing.insert_data(
             self.data, self.session, circle_bar, self.binding, srid=self.srid)
         return
