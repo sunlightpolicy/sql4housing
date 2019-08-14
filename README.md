@@ -1,4 +1,15 @@
-This tool is based on a cloned copy of Dallas Morning News' [socrata2sql](https://github.com/DallasMorningNews/socrata2sql). Socrata2sql is a tool which allows you to import any dataset on the Socrata API and copy it into a SQL database of your choice using a command line interface. Here, I aim to adapt socrata2sql to be able to import datasets from the following sources:
+# sql4housing
+
+## Background
+
+Sql4housing is based on a broader effort to encourage collaboration between civic hackers and housing advocates. Read more about this work on our blog here:
+
+[Hacking for Housing: How open data and civic hacking creates wins for housing advocates](https://sunlightfoundation.com/2019/07/22/hacking-for-housing-how-open-data-and-civic-hacking-creates-wins-for-housing-advocates/) <br>
+
+
+## Introduction
+
+Sql4housing is based on a cloned copy of Dallas Morning News' [socrata2sql](https://github.com/DallasMorningNews/socrata2sql). Socrata2sql is a tool which allows you to import any dataset on the Socrata API and copy it into a SQL database of your choice using a command line interface. Here, I aim to adapt socrata2sql to be able to import datasets from the following sources:
 
 -[HUD's Open Data Portal](https://hudgis-hud.opendata.arcgis.com/)<br>
 -Any locally saved Excel file or Excel download hyperlink<br>
