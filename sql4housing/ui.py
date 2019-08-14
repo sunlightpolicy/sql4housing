@@ -3,4 +3,7 @@ def header(header_str, color=''):
 
 
 def item(item_str):
-    print('  ▶ %s' % item_str)
+	try:
+    	print('  ▶ %s' % item_str)
+    except UnicodeEncodeError:
+    	print('  - %s' % item_str)

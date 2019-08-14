@@ -17,7 +17,7 @@ Usage:
   sql4housing (-v | --version)
 
 Options:
-  <bulk_load>        Loads all datasets documented within the file bulk_load.py.
+  <bulk_load>        Loads all datasets documented within the file bulk_load.yaml.
   <site>             The domain for the open data site. For Socrata, this is the
                      URL to the open data portal (Ex: www.dallasopendata.com).
                      For HUD, this is the Query URL as created in the API
@@ -296,8 +296,6 @@ def load_yaml():
 def main():
 
     arguments = docopt(__doc__)
-    print(arguments)
-
 
     try:
 
