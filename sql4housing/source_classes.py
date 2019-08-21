@@ -20,8 +20,8 @@ import io
 import requests
 import time
 import warnings
-from sql4housing import utils
-from sql4housing import ui
+import utils
+import ui
 
 class Spreadsheet:
     '''
@@ -80,15 +80,17 @@ class Csv(Spreadsheet):
 
     def __create_tbl_name(self):
 
+
         pattern = "(?:(?<=http://)|(?<=https://))[^\s]+(?=\.csv)"
-        sub_str = re.search(pattern, self.location).group().lower()
+        sub_str = re.search(pattern, self.location)
 
         if not sub_str:
             pattern = "[^\s]+(?=\.csv)"
-            sub_str = re.search(pattern, self.location).group().lower()
+            sub_str = re.search(pattern, self.location).group()
+        else:
+            sub_str = sub_str.group()
 
-        return \
-            re.compile('[%s]' % re.escape(string.punctuation)).sub("_", sub_str)
+        return utils.clean_string(sub_str)
 
 class SpatialFile:
     '''
@@ -138,8 +140,7 @@ class Shape(SpatialFile):
         ui.item("Reading shapefile")
         #set default table name
         tbl_name = shp[shp.rfind("/") + 1:-4].lower()
-        tbl_name = re.compile(
-            '[%s]' % re.escape(string.punctuation)).sub("_", tbl_name)
+        tbl_name = utils.clean_string(tbl_name)
         return tbl_name, shapefile.Reader(shp).__geo_interface__
 
 
@@ -189,8 +190,7 @@ class GeoJson(SpatialFile):
             "(?=\.geojson)|(?=\?method=export&format=GeoJSON))")
             sub_str = re.search(pattern, self.location)
         sub_str = sub_str.group().lower()
-        return re.compile(
-            '[%s]' % re.escape(string.punctuation)).sub("_", sub_str)
+        return utils.clean_string(sub_str)
 
 class CenPy:
     '''
@@ -198,7 +198,7 @@ class CenPy:
     '''
     def __init__(self, product, year, place_type, place, level, variables):
         self.name = product
-        self.tbl_name = "_".join([product, str(year), place]).lower().strip()
+        self.tbl_name = "_".join([product, str(year)]).lower().strip()
         self.engine = None
         self.session = None
         self.geo = None
@@ -221,12 +221,15 @@ class CenPy:
                         'county': cen_prod.from_county,
                         'state': cen_prod.from_state,
                         'placename': cen_prod.from_place}
-        ui.item(("Retrieving variables %s for all %ss in %s." +
+        ui.item(("Retrieving variables %s for all %ss in %s. " +
             "This can take some time for large datasets.") % \
             (variables, level, place))
         print()
-        return place_mapper[place_type](
+        print(place, level, variables)
+        df = place_mapper[place_type](
             place, level=level, variables=variables)
+        df.columns = [utils.clean_string(x) for x in df.columns]
+        return df
 
     def insert(self, circle_bar):
         ui.item("Inserting into PostGIS.")
@@ -276,7 +279,7 @@ class SocrataPortal(Portal):
 
         self.num_rows = int(
             self.client.get(
-                self.dataset_id, select='COUNT(*) AS count')[0]['count'])
+                self.dataset_id, select='COUNT(*) AS count'))[0]['count']
         self.data = self.__get_socrata_data(5000)
 
     def __get_metadata(self):
@@ -292,7 +295,8 @@ class SocrataPortal(Portal):
                 metadata.append(
                     (col['fieldName'], self.col_mappings[col['dataTypeName']]))
             except KeyError:
-                warnings.warn('Unable to map "%s" to a SQL type.' % col_name)
+                warnings.warn(
+                    'Unable to map "%s" to a SQL type.' % col['fieldName'])
                 continue
         return metadata
 

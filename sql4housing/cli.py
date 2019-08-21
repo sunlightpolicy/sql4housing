@@ -17,16 +17,21 @@ Usage:
   sql4housing (-v | --version)
 
 Options:
-  <bulk_load>        Loads all datasets documented within the file bulk_load.yaml.
+  <bulk_load>        Loads all datasets documented within a file entitled bulk_load.yaml.
+                     Must be run in the same folder where bulk_load.yaml is saved.
   <site>             The domain for the open data site. For Socrata, this is the
                      URL to the open data portal (Ex: www.dallasopendata.com).
                      For HUD, this is the Query URL as created in the API
                      Explorer portion of each dataset's page on the site
-                     https://hudgis-hud.opendata.arcgis.com.
+                     https://hudgis-hud.opendata.arcgis.com. See example use cases
+                     for detailed instructions.
   <dataset_id>       The ID of the dataset on Socrata's open data site. This is
                      usually a few characters, separated by a hyphen, at the end
                      of the URL. Ex: 64pp-jeba
   <location>         Either the path or download URL where the file can be accessed.
+  <variables>.       Census variable codes to be retrieved. (i.e. ['B19013, 'B25064']).
+                     Variable codes can be determined via American FactFinder or
+                     censusreporter.org.
   --d=<database_url> Database connection string for destination database as
                      diacdlect+driver://username:password@host:port/database.
                      Default: "postgresql:///mydb"
@@ -56,16 +61,16 @@ Examples:
 
   Load the Dallas check register into a local SQLite file (file name chosen
   from the dataset name):
-  $ sql4housing.py socrata www.dallasopendata.com 64pp-jeba
+  $ sql4housing socrata www.dallasopendata.com 64pp-jeba
 
   Load it into a PostgreSQL database called mydb:
-  $ sql4housing.py socrata www.dallasopendata.com 64pp-jeba -d"postgresql:///mydb"
+  $ sql4housing socrata www.dallasopendata.com 64pp-jeba -d"postgresql:///mydb"
 
   Load Public Housing Buildings from HUD into a PostgreSQL database called mydb:
-  $ sql4housing.py hud "https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/Public_Housing_Buildings/FeatureServer/0/query?outFields=*&where=1%3D1" -d=postgresql:///mydb
+  $ sql4housing hud "https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/Public_Housing_Buildings/FeatureServer/0/query?outFields=*&where=1%3D1" -d=postgresql:///mydb
 
   Load Public Housing Physical Inspection scores into a PostgreSQL database called housingdb:
-  $ sql4housing.py excel "http://www.huduser.org/portal/datasets/pis/public_housing_physical_inspection_scores.xlsx" -d=postgresql:///housingdb
+  $ sql4housing excel "http://www.huduser.org/portal/datasets/pis/public_housing_physical_inspection_scores.xlsx" -d=postgresql:///housingdb
 """
 import warnings
 from docopt import docopt
@@ -81,9 +86,10 @@ import yaml
 from yaml import CLoader as Loader
 from requests.exceptions import SSLError
 
-from sql4housing import source_classes as sc
-from sql4housing import ui
-from sql4housing.exceptions import CLIError
+import source_classes as sc
+import ui
+from exceptions import CLIError
+import utils
 
 
 def get_binding(source):
@@ -129,6 +135,8 @@ def get_binding(source):
             continue
 
         try:
+
+            col_name = utils.clean_string(col_name)
 
             assert (col_type), 'Unable to map %s type to a SQL type.' % (
                 source.name)
@@ -224,6 +232,7 @@ def insert_source(source):
 
 def load_yaml():
     output = yaml.load(open('bulk_load.yaml'), Loader=Loader)
+
     db_name = output['DATABASE']
 
     source_mapper = {'GEOJSONS': sc.GeoJson,
@@ -236,11 +245,16 @@ def load_yaml():
         try:
 
             for dataset in output[output_dict]:
-                location, tbl_name = list(dataset.items())[0]
-                source = source_mapper[output_dict](location)
-                if tbl_name:
-                    source.tbl_name = tbl_name
-                insert_source(source)
+                if dataset:
+                    location, tbl_name = list(dataset.items())[0]
+                    source = source_mapper[output_dict](location)
+                    if tbl_name:
+                        source.tbl_name = tbl_name
+                    if db_name:
+                        source.db_name = db_name
+                    insert_source(source)
+                else:
+                    continue
         except Exception as e:
 
             ui.item(("Skipping %s load due to error: \"%s\". Double check " +
@@ -262,6 +276,10 @@ def load_yaml():
                     dataset_id, tbl_name = list(dataset.items())[0]
                     source = sc.SocrataPortal(
                         url, dataset_id, app_token, tbl_name)
+                    if db_name:
+                        source.db_name = db_name
+                    if tbl_name:
+                        source.tbl_name = tbl_name
                     insert_source(source)
     except Exception as e:
         ui.item(("Skipping Socrata load due to error: \"%s\". Double check " +
@@ -286,6 +304,11 @@ def load_yaml():
             variables = dataset[product]['variables']
             source = sc.CenPy(
                 product, year, place_type, place_name, level, variables)
+            if db_name:
+                source.db_name = db_name
+            if tbl_name:
+                source.tbl_name = tbl_name
+            insert_source(source)
     except Exception as e:        
         ui.item(("Skipping Census load due to error: \"%s\". Double check " +
             "formatting of bulk_load.yaml if this was unintentional.") % e)
@@ -354,7 +377,7 @@ def main():
                     source = sc.CenPy(
                         'ACS', year, place_type,
                         place_arg, level,
-                        [arguments['<variables>']])
+                        arguments['<variables>'])
 
             if arguments['--d']:
                 source.db_name = arguments['--d']

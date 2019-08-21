@@ -8,10 +8,11 @@ from sqlalchemy.types import DateTime, Text
 from geoalchemy2.types import Geometry
 import urllib
 import json
+import string
 import warnings
 
-from sql4housing.parsers import parse_datetime, parse_geom, parse_str
-from sql4housing import ui
+from parsers import parse_datetime, parse_geom, parse_str
+import ui
 
 def get_table_name(raw_str):
     '''
@@ -39,6 +40,10 @@ def insert_data(page, session, circle_bar, Binding, srid=4326, socrata=False):
         circle_bar.next(n=len(to_insert))
 
     return
+
+def clean_string(sub_str):
+    return re.compile('[%s]' % re.escape(string.punctuation)).sub(
+                "_", sub_str.lower())
 
 def geojson_data(geojson):
     '''
