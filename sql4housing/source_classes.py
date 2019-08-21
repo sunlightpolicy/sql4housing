@@ -20,8 +20,8 @@ import io
 import requests
 import time
 import warnings
-import utils
-import ui
+from sql4housing import utils
+from sql4housing import ui
 
 class Spreadsheet:
     '''

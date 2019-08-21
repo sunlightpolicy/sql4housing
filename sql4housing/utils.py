@@ -12,7 +12,7 @@ import string
 import warnings
 
 from parsers import parse_datetime, parse_geom, parse_str
-import ui
+from sql4housing import ui
 
 def get_table_name(raw_str):
     '''

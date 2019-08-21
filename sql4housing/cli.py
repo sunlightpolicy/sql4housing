@@ -86,10 +86,10 @@ import yaml
 from yaml import CLoader as Loader
 from requests.exceptions import SSLError
 
-import source_classes as sc
-import ui
-from exceptions import CLIError
-import utils
+from sql4housing import source_classes as sc
+from sql4housing import ui
+from sql4housing.exceptions import CLIError
+from sql4housing import utils
 
 
 def get_binding(source):
