@@ -1,4 +1,4 @@
-numpy==1.16.2
+numpy==1.22.0
 pandas==0.24.2
 sodapy==1.5.2
 shapely==1.6.4post1
